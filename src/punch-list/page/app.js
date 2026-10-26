@@ -330,7 +330,7 @@ function noteField(q, { hint } = {}) {
   const ta = el('textarea', { id, class: 'note', placeholder: 'Optional', 'data-edit': 'note' });
   ta.value = answerOf(q.id)?.note || '';
   ta.addEventListener('input', () => setAnswer(q.id, { note: ta.value }));
-  const label = el('label', { for: id, html: `Note for Claude <span style="color:var(--faint)">·${hint ? ' <kbd>e</kbd> to type,' : ''} <kbd>⇧↵</kbd> send</span>` });
+  const label = el('label', { for: id, html: `Note for Claude <span style="color:var(--faint)">·${hint ? ' <kbd>e</kbd> to type,' : ''} <kbd>⇧↵</kbd> new line, <kbd>↵</kbd> next</span>` });
   return el('div', { class: 'field' }, label, ta);
 }
 
@@ -358,10 +358,10 @@ function askBox(q, { onAsked } = {}) {
     onAsked?.();
   };
   ta.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && (e.shiftKey || e.metaKey || e.ctrlKey)) { e.preventDefault(); e.stopPropagation(); submit(); }
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); e.stopPropagation(); submit(); }
   });
   box.append(ta, el('div', { class: 'actions' },
-    el('button', { type: 'button', class: 'btn', html: 'Ask Claude <kbd>⇧↵</kbd>', onclick: submit }),
+    el('button', { type: 'button', class: 'btn', html: 'Ask Claude <kbd>↵</kbd>', onclick: submit }),
     el('button', { type: 'button', class: 'btn ghost', html: 'Cancel <kbd>Esc</kbd>', onclick: () => (box.hidden = true) }),
   ));
   return box;
@@ -521,7 +521,7 @@ function renderFocus() {
     if (isFresh(q)) { ui.seen[q.id] = q.state.explanations.length; saveUi(); }
     board.append(el('div', { 'data-slot': 'prev' }), focusCard(q), el('div', { 'data-slot': 'next' }));
   }
-  board.append(el('div', { class: 'hint', html: '<span><kbd>1</kbd>–<kbd>9</kbd> pick</span><span><kbd>e</kbd> edit text</span><span><kbd>↵</kbd> next that needs me</span><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>s</kbd> skip</span><span><kbd>?</kbd> wait, what?</span><span><kbd>⌘B</kbd> list</span><span><kbd>⇧↵</kbd> in a text box: send</span>' }));
+  board.append(el('div', { class: 'hint', html: '<span><kbd>1</kbd>–<kbd>9</kbd> pick</span><span><kbd>e</kbd> edit text</span><span><kbd>↵</kbd> next that needs me</span><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>s</kbd> skip</span><span><kbd>?</kbd> wait, what?</span><span><kbd>⌘B</kbd> list</span><span><kbd>⌘↵</kbd> send to Claude</span>' }));
   renderFocusSoft();
   renderInspector();
 }
@@ -574,7 +574,7 @@ function focusCard(q) {
     onPicked: () => { clearTimeout(focus.pendingAdvance); focus.pendingAdvance = setTimeout(nextNeeding, 380); },
   });
   const editable = q.type === 'text' || q.type === 'number';
-  if (editable) card.append(el('div', { class: 'field' }, el('label', { html: 'Your answer <span style="color:var(--faint)">· <kbd>e</kbd> to type, <kbd>⇧↵</kbd> send to Claude, <kbd>Esc</kbd> to leave</span>' }), input));
+  if (editable) card.append(el('div', { class: 'field' }, el('label', { html: 'Your answer <span style="color:var(--faint)">· <kbd>e</kbd> to type, <kbd>⇧↵</kbd> new line, <kbd>↵</kbd> next, <kbd>Esc</kbd> to leave</span>' }), input));
   else card.append(input);
   if (!editable && q.type !== 'custom') card.append(noteField(q, { hint: true }));
   if (!wide()) {
@@ -930,6 +930,17 @@ function reveal(qid) {
   }
 }
 
+/** Card layouts: Enter in a text box moves on to the next visible question card. */
+function nextCardAfter(node) {
+  const cardsInView = [...$('board').querySelectorAll('.card[data-qid]')].filter((c) => !c.hidden);
+  const next = cardsInView[cardsInView.indexOf(node.closest('.card')) + 1];
+  if (!next) return;
+  next.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  next.classList.add('flash');
+  setTimeout(() => next.classList.remove('flash'), 1200);
+  next.querySelector('[data-edit=answer], .choice, [data-edit=note]')?.focus({ preventScroll: true });
+}
+
 // ---------- status bar actions ----------
 
 $('copy-resume').addEventListener('click', async () => {
@@ -1034,8 +1045,14 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendAll(); return; }
   if ((e.key === 'b' || e.key === 'B') && (e.metaKey || e.ctrlKey)) { e.preventDefault(); toggleSidebar(); return; }
   if (typing) {
-    // Enter keeps its normal meaning (a new line); Shift+Enter sends the answers to Claude.
-    if (e.key === 'Enter' && e.shiftKey && e.target.matches('textarea, input')) { e.preventDefault(); sendAll(); return; }
+    // In a text box: Shift+Enter is a new line (the browser default), Enter moves to the next question.
+    if (e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.isComposing && e.target.matches('[data-edit]')) {
+      e.preventDefault();
+      e.target.blur();
+      if (isFocus()) nextNeeding();
+      else nextCardAfter(e.target);
+      return;
+    }
     if (e.key === 'Escape') {
       const ask = e.target.closest('[data-role=ask]');
       if (ask) ask.hidden = true;
