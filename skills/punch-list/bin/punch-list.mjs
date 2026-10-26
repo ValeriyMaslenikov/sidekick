@@ -3316,7 +3316,7 @@ function renderProgress() {
   $('progress').replaceChildren(segs, labels);
   $('sbCounts').innerHTML = counts.map((n, g) => \`<span title="\${GROUP_NAME[g]}">\${GLYPH[g]}\${n}</span>\`).join('');
   const unsent = shown.filter((q) => isUnsent(q.id)).length;
-  $('sbUnsent').textContent = unsent ? \`\${unsent} unsent\` : 'all sent';
+  $('sbUnsent').textContent = unsent ? \`\${unsent} unsent\` : focus.lastSentAt ? \`sent \${clock(focus.lastSentAt)}\` : 'all sent';
   $('send').disabled = unsent === 0;
   $('done').textContent = view.done ? 'Done \u2713' : 'Done';
   $('done').disabled = view.done;
@@ -3378,6 +3378,7 @@ function goTo(id, dir) {
 function nextNeeding() {
   clearTimeout(focus.pendingAdvance);
   const next = firstNeeding(focus.current);
+  if (!next && !focus.current) return;
   goTo(next && next !== focus.current ? next : null, 1);
 }
 
@@ -3391,7 +3392,7 @@ function renderFocus() {
   const board = $('board');
   if (focus.current && (!view.questions.some((q) => q.id === focus.current) || !visible(qById(focus.current)))) focus.current = firstNeeding(null);
   const q = focus.current && qById(focus.current);
-  const key = q ? focusHardKey(q) : \`done:\${view.done}:\${JSON.stringify(view.questions.map((x) => [x.id, groupOf(x)]))}\`;
+  const key = q ? focusHardKey(q) : \`done:\${view.done}:\${unsentCount()}:\${focus.lastSentAt}:\${JSON.stringify(view.questions.map((x) => [x.id, groupOf(x)]))}\`;
   if (key === focus.hardKey) return renderFocusSoft();
   // Never rebuild under the person's cursor; catch up when they leave the field.
   const typing = document.activeElement?.matches?.('textarea, input') && ($('board').contains(document.activeElement) || $('inspBody').contains(document.activeElement));
@@ -3477,23 +3478,48 @@ function focusCard(q) {
   return card;
 }
 
+const unsentCount = () => view.questions.filter((q) => visible(q) && groupOf(q) !== 4 && isUnsent(q.id)).length;
+const clock = (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+/** What Enter does when nothing needs the person: send unsent answers, else mark the board done. */
+function primaryAction() {
+  if (unsentCount() > 0) return sendAll();
+  if (!view.done) return $('done').click();
+}
+
 function doneCard() {
   const shown = view.questions.filter(visible);
   const skipped = shown.filter((q) => groupOf(q) === 3);
   const explaining = shown.filter((q) => groupOf(q) === 1);
+  const unsent = unsentCount();
   const card = el('section', { class: 'f-card done-card enter ok-c' });
   card.innerHTML = '<svg class="big" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.8 8.3l2.1 2.1 4.3-4.6" fill="none" stroke="var(--bg)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  card.append(el('h2', { text: 'Nothing needs you right now' }));
-  card.append(el('p', { class: 'muted', style: 'margin:0', text: explaining.length ? \`Claude is still explaining \${explaining.length} question\${explaining.length > 1 ? 's' : ''}; it comes back to the top when the answer lands.\` : view.done ? 'The board is marked done.' : 'Send your answers, or mark the board done.' }));
+  const actions = el('div', { class: 'actions' });
+  if (view.done) {
+    card.append(el('h2', { text: 'Board marked done' }), el('p', { class: 'muted', style: 'margin:0', text: 'Claude has everything and is working on it. You can close this tab; reopen the board if you want to change something.' }));
+    actions.append(el('button', { type: 'button', class: 'btn ghost', text: 'Reopen', onclick: () => post('reopen') }));
+  } else if (unsent > 0) {
+    card.append(el('h2', { text: skipped.length || explaining.length ? 'Nothing needs you right now' : 'Everything is answered' }), el('p', { class: 'muted', style: 'margin:0', text: \`\${unsent} answer\${unsent === 1 ? " hasn't" : "s haven't"} been sent to Claude yet.\` }));
+    actions.append(
+      el('button', { type: 'button', class: 'btn', 'data-primary': '', html: 'Send to Claude <kbd>\u21B5</kbd>', onclick: sendAll }),
+      el('button', { type: 'button', class: 'btn ghost', text: 'Done', onclick: () => $('done').click() }),
+    );
+  } else {
+    const at = focus.lastSentAt ? \` at \${clock(focus.lastSentAt)}\` : '';
+    card.append(el('h2', { text: \`Sent to Claude\${at}\` }), el('p', { class: 'muted', style: 'margin:0', text: "Claude has your answers. Mark the board done when you're finished, or keep editing: changes show up here as unsent." }));
+    const firstAnswered = sortedIds().find((id) => groupOf(qById(id)) === 2);
+    actions.append(
+      el('button', { type: 'button', class: 'btn', 'data-primary': '', html: 'Mark board done <kbd>\u21B5</kbd>', onclick: () => $('done').click() }),
+      firstAnswered ? el('button', { type: 'button', class: 'btn ghost', text: 'Review answers', onclick: () => goTo(firstAnswered, -1) }) : null,
+    );
+  }
+  if (explaining.length) card.append(el('p', { class: 'muted', style: 'margin:0', text: \`Claude is still explaining \${explaining.length} question\${explaining.length > 1 ? 's' : ''}; it comes back to the top when the answer lands.\` }));
   if (skipped.length) {
     const later = el('div', { class: 'later' }, el('div', { class: 'f-top' }, el('span', { text: 'You skipped' })));
     for (const q of skipped) later.append(peek(q.id, 'go back'));
     card.append(later);
   }
-  card.append(el('div', { class: 'actions' },
-    el('button', { type: 'button', class: 'btn', html: 'Send to Claude <kbd>\u2318\u21B5</kbd>', onclick: sendAll }),
-    el('button', { type: 'button', class: 'btn ghost', text: 'Done', onclick: () => $('done').click() }),
-  ));
+  card.append(actions);
   return card;
 }
 
@@ -3839,7 +3865,10 @@ $('copy-resume').addEventListener('click', async () => {
 async function sendAll() {
   await flushAll();
   const { sent } = await post('send');
+  if (sent) focus.lastSentAt = new Date();
   toast(sent ? 'Sent to Claude.' : 'Nothing new to send.');
+  if (isFocus()) renderFocus();
+  renderProgress();
 }
 $('send').addEventListener('click', sendAll);
 
@@ -3953,7 +3982,7 @@ document.addEventListener('keydown', (e) => {
   if (!view || !isFocus()) return;
   const ids = sortedIds();
   const i = ids.indexOf(focus.current);
-  if (e.key === 'Enter' && !e.target.closest?.('button, a')) { e.preventDefault(); return nextNeeding(); }
+  if (e.key === 'Enter' && !e.target.closest?.('button, a')) { e.preventDefault(); return focus.current ? nextNeeding() : primaryAction(); }
   if (e.key === 'ArrowDown' || e.key === 'j') { e.preventDefault(); if (ids[i + 1]) goTo(ids[i + 1], 1); return; }
   if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); if (i > 0) goTo(ids[i - 1], -1); return; }
   const q = focus.current && qById(focus.current);
