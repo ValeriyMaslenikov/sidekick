@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>punch-list boards</title>
+<link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+<div class="page">
+  <header class="head">
+    <div class="eyebrow"><span class="brand">punch-list</span></div>
+    <h1>Boards</h1>
+  </header>
+  <main id="list" class="index-list"><p class="muted">Loading…</p></main>
+</div>
+<script type="module">
+  const t = new URLSearchParams(location.search).get('t') || '';
+  const list = document.getElementById('list');
+  const res = await fetch('/api/index', { headers: { 'x-sidekick-token': t } });
+  if (!res.ok) {
+    list.innerHTML = '<p class="muted">Open this page from the link your agent printed; it carries the access token.</p>';
+  } else {
+    const { boards } = await res.json();
+    list.replaceChildren();
+    if (!boards.length) list.innerHTML = '<p class="muted">No boards yet. When an agent opens one, it shows up here.</p>';
+    boards.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    for (const b of boards) {
+      const a = document.createElement('a');
+      a.className = 'index-row';
+      a.href = `/b/${encodeURIComponent(b.id)}?t=${encodeURIComponent(t)}`;
+      const status = b.done ? 'done' : `${b.open} open`;
+      a.innerHTML = `<span class="index-title"></span><span class="chip ${b.done ? 'ok' : ''}">${status}</span><span class="muted index-date"></span>`;
+      a.querySelector('.index-title').textContent = b.title;
+      a.querySelector('.index-date').textContent = new Date(b.createdAt).toLocaleString();
+      list.append(a);
+    }
+  }
+</script>
+</body>
+</html>

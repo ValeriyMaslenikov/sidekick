@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>punch-list</title>
+<link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+<div class="page">
+  <header class="head">
+    <div class="eyebrow"><span class="brand">punch-list</span><span id="board-id"></span></div>
+    <h1 id="title">Loading…</h1>
+    <div id="intro" class="intro rich"></div>
+  </header>
+
+  <div id="banner-conn" class="banner warn" hidden>Lost connection to the punch-list server. Reconnecting…</div>
+  <div id="banner-listen" class="banner warn" hidden>
+    <div><strong>Claude isn't listening.</strong> Your answers are saved. Paste this into your agent to pick the board back up:</div>
+    <div class="copyrow"><code id="resume-prompt"></code><button type="button" class="btn small" id="copy-resume">Copy</button></div>
+  </div>
+  <div id="banner-done" class="banner ok" hidden>
+    <span>Marked done. Claude has your answers.</span>
+    <button type="button" class="btn small ghost" id="reopen">Reopen</button>
+  </div>
+
+  <main id="board" class="board"></main>
+</div>
+
+<div class="bar" id="bar">
+  <div class="bar-in">
+    <div class="counts" id="counts"></div>
+    <div class="actions" id="actions">
+      <span class="listen-dot" id="listen-dot" title=""></span>
+      <button type="button" class="btn" id="send">Send to Claude</button>
+      <button type="button" class="btn ghost" id="done">Done</button>
+    </div>
+    <div class="actions" id="confirm-done" hidden>
+      <span id="confirm-text"></span>
+      <button type="button" class="btn ghost" id="keep">Keep answering</button>
+      <button type="button" class="btn" id="done-anyway">Mark done anyway</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal-back" data-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <button type="button" class="btn small ghost modal-x" data-close aria-label="Close">Close</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<script type="module" src="/assets/app.js"></script>
+</body>
+</html>

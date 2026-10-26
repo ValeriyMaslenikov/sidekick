@@ -31,6 +31,8 @@ export interface Question {
 export interface Layout {
   type: LayoutType;
   groups?: { id: string; title: string }[];
+  /** Columns Layout: "status" makes one column per answer status instead of per group. */
+  columnsBy?: "group" | "status";
   /** Custom Layout only: page HTML; Questions mount into `[data-pl-question="<id>"]`. */
   html?: string;
   /** Custom Layout only: script run after mounting, with `window.punchList` available. */
