@@ -1,0 +1,11 @@
+{
+  "name": "sidekick",
+  "owner": { "name": "Valerii Maslenykov" },
+  "plugins": [
+    {
+      "name": "sidekick",
+      "source": "./",
+      "description": "Skills that help a person in daily work with AI agents, starting with punch-list."
+    }
+  ]
+}

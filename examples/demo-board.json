@@ -1,0 +1,25 @@
+{
+  "title": "Demo: plan the team offsite",
+  "intro": "<p>A sample Board that uses every answer type. Answer in any order; press <b>Wait, what?</b> on anything unclear.</p>",
+  "layout": { "type": "tabs", "groups": [{ "id": "basics", "title": "Basics" }, { "id": "agenda", "title": "Agenda" }, { "id": "extras", "title": "Extras" }] },
+  "questions": [
+    { "id": "go", "group": "basics", "title": "Should we run an offsite this quarter?", "type": "yes-no",
+      "body": "<p>Last one was in March. Budget is approved up to <code>€8k</code>.</p>" },
+    { "id": "where", "group": "basics", "title": "Where?", "type": "single", "showIf": { "go": "yes" },
+      "options": [
+        { "value": "lisbon", "label": "Lisbon", "detail": "Cheapest flights for most of the team.", "recommended": true },
+        { "value": "krakow", "label": "Kraków", "detail": "Closest to the dev team." },
+        { "value": "remote", "label": "Remote only" }
+      ] },
+    { "id": "days", "group": "basics", "title": "How many days?", "type": "number", "min": 1, "max": 5, "showIf": { "go": "yes" } },
+    { "id": "topics", "group": "agenda", "title": "Which topics must be covered?", "type": "multi",
+      "options": [{ "value": "roadmap", "label": "2027 roadmap" }, { "value": "oncall", "label": "On-call rotation" }, { "value": "hiring", "label": "Hiring plan" }, { "value": "fun", "label": "Something fun" }] },
+    { "id": "order", "group": "agenda", "title": "Rank the sessions by importance", "type": "rank",
+      "body": "<pre class=\"mermaid\">flowchart LR\n  Roadmap --> Hiring --> Oncall</pre>",
+      "options": [{ "value": "roadmap", "label": "Roadmap" }, { "value": "hiring", "label": "Hiring" }, { "value": "oncall", "label": "On-call" }] },
+    { "id": "energy", "group": "extras", "title": "How tired is the team right now?", "type": "scale", "min": 1, "max": 5 },
+    { "id": "food", "group": "extras", "title": "Any dietary needs I should know about?", "type": "text", "optional": true },
+    { "id": "color", "group": "extras", "title": "Pick a team T-shirt colour", "type": "custom",
+      "body": "<div style=\"display:flex;gap:8px\"><button class=\"btn ghost\" onclick=\"punchList.answer('color','teal')\">Teal</button><button class=\"btn ghost\" onclick=\"punchList.answer('color','orange')\">Orange</button></div>" }
+  ]
+}

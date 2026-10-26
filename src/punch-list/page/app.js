@@ -299,7 +299,7 @@ function renderInput(q, box) {
           if (o.detail) {
             const d = el('span', { class: 'opt-detail rich' });
             setRich(d, o.detail);
-            body.append(el('br'), d);
+            body.append(d);
           }
           return el('label', { class: 'opt' }, input, body);
         }),
@@ -339,7 +339,10 @@ function renderInput(q, box) {
 function seg(values, cur, onPick) {
   return el('div', { class: 'seg' },
     values.map(([v, label]) =>
-      el('button', { type: 'button', class: 'btn ghost', 'aria-pressed': String(cur === v), text: label, onclick: () => onPick(v) }),
+      el('button', { type: 'button', class: 'btn ghost', 'aria-pressed': String(cur === v), text: label, onclick: (e) => {
+        for (const b of e.currentTarget.parentNode.children) b.setAttribute('aria-pressed', String(b === e.currentTarget));
+        onPick(v);
+      } }),
     ),
   );
 }
@@ -473,6 +476,7 @@ function buildTabs(root) {
     saveUi();
     for (const b of bar.children) b.setAttribute('aria-selected', String(b.dataset.id === id));
     panel.replaceChildren(...ps.find((p) => p.id === id).qs.map((q) => cards.get(q.id).el));
+    queueMermaid();
   };
   for (const p of ps) {
     bar.append(el('button', { type: 'button', class: 'tab', role: 'tab', 'data-id': p.id, onclick: () => show(p.id) },
@@ -500,6 +504,7 @@ function buildWizard(root) {
     back.disabled = i === 0;
     next.disabled = i === ps.length - 1;
     next.textContent = i === ps.length - 1 ? 'Last step' : 'Next';
+    queueMermaid();
     scrollTo({ top: 0, behavior: 'smooth' });
   };
   back.onclick = () => show(ui.step - 1);
@@ -562,6 +567,7 @@ function openModal(qid) {
   $('modal-body').replaceChildren(card.el);
   card.el.hidden = false;
   $('modal').hidden = false;
+  queueMermaid();
 }
 
 function closeModal() {
@@ -588,11 +594,11 @@ function refreshDerived() {
   const shown = view.questions.filter((q) => visible(q) && statusOf(q) !== 'withdrawn');
   const count = (s) => shown.filter((q) => statusOf(q) === s).length;
   const unsent = shown.filter((q) => isUnsent(q.id)).length;
-  $('counts').replaceChildren(
+  $('counts').replaceChildren(...[
     el('span', { text: `${count('answered')}/${shown.length} answered` }),
     count('skipped') ? el('span', { text: `${count('skipped')} skipped` }) : null,
     el('span', { text: unsent ? `${unsent} unsent` : 'all sent' }),
-  );
+  ].filter(Boolean));
   const send = $('send');
   send.textContent = unsent ? `Send to Claude (${unsent})` : 'Send to Claude';
   send.disabled = unsent === 0;

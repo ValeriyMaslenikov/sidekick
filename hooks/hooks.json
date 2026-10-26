@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/skills/punch-list/bin/punch-list.mjs\" hook-stop" }
+        ]
+      }
+    ]
+  }
+}

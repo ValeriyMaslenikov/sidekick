@@ -96,7 +96,7 @@ h1 { margin: 0; font-size: 26px; line-height: 1.2; text-wrap: balance; }
 .opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
 .opt input { margin: 3px 0 0; accent-color: var(--accent); }
 .opt-label { font-weight: 600; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.opt-detail { color: var(--muted); font-size: 14px; }
+.opt-detail { color: var(--muted); font-size: 14px; display: block; margin-top: 2px; }
 .seg { display: flex; flex-wrap: wrap; gap: 8px; }
 .seg button { min-width: 64px; }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }

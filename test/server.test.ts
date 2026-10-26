@@ -54,6 +54,15 @@ describe('server', () => {
     expect(events[0]).toMatchObject({ type: 'answers' });
   });
 
+  it('delivers the answers and done events of one Done press in a single wait', async () => {
+    const pending = agent('/api/boards/errors/wait?timeout=20');
+    await new Promise((r) => setTimeout(r, 20));
+    await post('/b/errors/draft', { qid: 'rows', answer: { value: 'yes' } });
+    await post('/b/errors/done', {});
+    const { events } = await (await pending).json();
+    expect(events.map((e: { type: string }) => e.type)).toEqual(['answers', 'done']);
+  });
+
   it('counts a listener while a wait is open and for 10 seconds after', async () => {
     expect(ctx.isListening('errors')).toBe(false);
     const pending = agent('/api/boards/errors/wait?timeout=20');

@@ -1,0 +1,8 @@
+{
+  "name": "sidekick",
+  "version": "0.1.0",
+  "description": "Skills that help a person in daily work with AI agents. punch-list: answer an agent's questions on a live local page, with an 'explain better' button on every question.",
+  "author": { "name": "Valerii Maslenykov" },
+  "license": "MIT",
+  "keywords": ["skills", "questions", "board", "human-in-the-loop"]
+}

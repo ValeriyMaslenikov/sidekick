@@ -14,6 +14,7 @@ import stylesCss from './page/styles.css?raw';
 
 export const LISTENER_GRACE_MS = 10_000;
 const MAX_WAIT_S = 25;
+const EVENT_SETTLE_MS = 150;
 
 export interface AppOptions {
   token: string;
@@ -26,7 +27,7 @@ interface ListenerState {
 }
 
 export function resumePrompt(id: string): string {
-  return `Resume listening on punch-list board "${id}": run \`punch-list status ${id}\`, handle anything pending, then run \`punch-list wait ${id}\` in the background.`;
+  return `Use the punch-list skill to resume board "${id}": run its \`status ${id}\` command, handle anything pending, then run \`wait ${id}\` in the background.`;
 }
 
 export function createApp({ token, now = Date.now }: AppOptions) {
@@ -72,6 +73,7 @@ export function createApp({ token, now = Date.now }: AppOptions) {
   const hasToken = (c: Context) => c.req.header('x-sidekick-token') === token || c.req.query('t') === token;
 
   app.get('/api/health', (c) => c.json({ app: 'punch-list', version: VERSION }));
+  app.get('/favicon.ico', (c) => c.body(null, 204));
   app.get('/assets/app.js', (c) => c.body(appJs, 200, { 'content-type': 'text/javascript; charset=utf-8' }));
   app.get('/assets/styles.css', (c) => c.body(stylesCss, 200, { 'content-type': 'text/css; charset=utf-8' }));
 
@@ -136,13 +138,19 @@ export function createApp({ token, now = Date.now }: AppOptions) {
         events = await new Promise<BoardEvent[]>((resolve) => {
           const done = (result: BoardEvent[]) => {
             clearTimeout(timer);
+            clearTimeout(settling);
             bus.off('change', onChange);
             resolve(result);
           };
+          let settling: NodeJS.Timeout | undefined;
           const onChange = (changed: string) => {
-            if (changed !== id) return;
-            const fresh = store.readEvents(id);
-            if (fresh.length) done(fresh);
+            if (changed !== id || settling) return;
+            // Let events written in the same burst (Done = answers + done) arrive together.
+            settling = setTimeout(() => {
+              settling = undefined;
+              const fresh = store.readEvents(id);
+              if (fresh.length) done(fresh);
+            }, EVENT_SETTLE_MS);
           };
           const timer = setTimeout(() => done([]), timeoutS * 1000);
           bus.on('change', onChange);
