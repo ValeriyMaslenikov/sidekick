@@ -72,7 +72,7 @@ export function createApp({ token, now = Date.now }: AppOptions) {
 
   const hasToken = (c: Context) => c.req.header('x-sidekick-token') === token || c.req.query('t') === token;
 
-  app.get('/api/health', (c) => c.json({ app: 'punch-list', version: VERSION }));
+  app.get('/api/health', (c) => c.json({ app: 'punch-list', version: VERSION, pid: process.pid }));
   app.get('/favicon.ico', (c) => c.body(null, 204));
   app.get('/assets/app.js', (c) => c.body(appJs, 200, { 'content-type': 'text/javascript; charset=utf-8' }));
   app.get('/assets/styles.css', (c) => c.body(stylesCss, 200, { 'content-type': 'text/css; charset=utf-8' }));
@@ -121,6 +121,11 @@ export function createApp({ token, now = Date.now }: AppOptions) {
     return c.json({ ok: true });
   });
 
+  app.post('/api/boards/:id/close', (c) => {
+    store.done(c.req.param('id'));
+    return c.json({ ok: true });
+  });
+
   app.post('/api/boards/:id/withdraw', async (c) => {
     const { qid, reason } = await c.req.json();
     store.withdraw(c.req.param('id'), qid, reason ?? '');
@@ -131,23 +136,34 @@ export function createApp({ token, now = Date.now }: AppOptions) {
     const id = c.req.param('id');
     store.get(id);
     const timeoutS = Math.min(MAX_WAIT_S, Math.max(0, Number(c.req.query('timeout') ?? MAX_WAIT_S)));
+    const signal = c.req.raw.signal;
     touchListener(id, +1);
     try {
       let events = store.readEvents(id);
       if (events.length === 0 && timeoutS > 0) {
-        events = await new Promise<BoardEvent[]>((resolve) => {
+        events = await new Promise<BoardEvent[]>((resolve, reject) => {
           const done = (result: BoardEvent[]) => {
             clearTimeout(timer);
             clearTimeout(settling);
             bus.off('change', onChange);
+            signal.removeEventListener('abort', onAbort);
             resolve(result);
           };
+          // A client that went away must not consume events.
+          const onAbort = () => done([]);
+          signal.addEventListener('abort', onAbort);
           let settling: NodeJS.Timeout | undefined;
           const onChange = (changed: string) => {
             if (changed !== id || settling) return;
             // Let events written in the same burst (Done = answers + done) arrive together.
             settling = setTimeout(() => {
               settling = undefined;
+              if (signal.aborted) return done([]);
+              if (!store.exists(id)) {
+                // Reject first: the promise settles once, and done() only cleans up after it.
+                reject(new Error(`board "${id}" not found`));
+                return done([]);
+              }
               const fresh = store.readEvents(id);
               if (fresh.length) done(fresh);
             }, EVENT_SETTLE_MS);

@@ -88,6 +88,25 @@ describe('punch-list CLI (built bundle)', () => {
     expect(run(['hook-stop'], JSON.stringify({ session_id: 'sess-1' })).stdout).toBe('');
   });
 
+  it('lets Claude stop when the stop hook already fired once', () => {
+    runJson(['open', 'hooky', '--file', '-'], boardJson);
+    expect(run(['hook-stop'], JSON.stringify({ session_id: 'sess-1', stop_hook_active: true })).stdout).toBe('');
+    runJson(['close', 'hooky']);
+    expect(run(['hook-stop'], JSON.stringify({ session_id: 'sess-1' })).stdout).toBe('');
+  });
+
+  it('stop does not kill a process that is not our server', async () => {
+    run(['stop']);
+    const other = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)']);
+    await new Promise((r) => setTimeout(r, 200));
+    writeFileSync(join(home, 'server.pid'), String(other.pid));
+    run(['stop']);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(other.exitCode).toBeNull();
+    expect(other.signalCode).toBeNull();
+    other.kill();
+  });
+
   it('fails clearly when the port belongs to another program', async () => {
     run(['stop']);
     const foreign: Server = createServer((_, res) => res.end('hello')).listen(port, '127.0.0.1');
@@ -96,6 +115,8 @@ describe('punch-list CLI (built bundle)', () => {
       const r = run(['list']);
       expect(r.status).toBe(2);
       expect(r.stderr).toContain(`Port ${port} is in use by another program; set "port" in ${join(home, 'config.json')}`);
+      const w = run(['wait', 'cli-test']);
+      expect(w.status).toBe(2);
     } finally {
       foreign.close();
     }

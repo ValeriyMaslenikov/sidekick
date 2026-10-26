@@ -124,4 +124,30 @@ describe('BoardStore', () => {
     expect(store.list().map((b) => b.id)).toEqual(['b-board']);
     expect(() => store.get('a-board')).toThrow(/not found/);
   });
+
+  it('reopens a done board when the person changes an answer', () => {
+    store.create('errors', input(), opts);
+    store.done('errors');
+    store.readEvents('errors');
+    store.saveDraft('errors', 'rows', { value: 'no' });
+    expect(store.get('errors').done).toBe(false);
+    expect(store.readEvents('errors').map((e) => e.type)).toEqual(['reopened']);
+  });
+
+  it('requires at least one question', () => {
+    expect(() => store.create('errors', { title: 'Empty', questions: [] }, opts)).toThrow(/questions: needs at least one/);
+  });
+
+  it('treats an identical re-push with keys in another order as unchanged', () => {
+    store.create('errors', input(), opts);
+    store.saveDraft('errors', 'flip', { value: 'a' });
+    store.push('errors', { questions: [{ options: [{ label: 'A', value: 'a' }, { label: 'B', value: 'b' }], type: 'single', title: 'What to do with flip?', id: 'flip' }] });
+    expect(store.get('errors').qstate.flip.changed).toBe(false);
+  });
+
+  it('refuses ids outside the boards directory on every lookup', () => {
+    expect(() => store.get('../x')).toThrow(/board id/);
+    expect(store.exists('../x')).toBe(false);
+  });
 });
+

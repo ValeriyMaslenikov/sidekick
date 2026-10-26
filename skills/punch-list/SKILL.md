@@ -33,7 +33,8 @@ No install step; the server starts itself.
 - `$PL push <board> --file patch.json`: add Questions (follow-ups), edit Questions, change `title`, `intro` or `layout`. The page redraws live and keeps their answers. Editing an answered Question marks it **Changed** so they re-check it.
 - `$PL withdraw <board> <qid> --reason "Not needed after your answer to Q2"`: grey out a Question you no longer need. Never silently drop one.
 - `$PL status <board>`: full snapshot (Questions, Answers, states, pending Events). Use it to resume a Board after a restart or context compaction, then start `wait` again.
-- Other: `$PL url <board>`, `$PL list`, `$PL rm <board>` (clean up Boards you no longer need).
+- `$PL close <board>`: mark the Board done from your side when the person says they don't need it any more (stops the Stop hook from asking you to listen).
+- Other: `$PL url <board>`, `$PL list`, `$PL rm <board>` (clean up Boards you no longer need; stop its `wait` first).
 
 ## Writing good Boards
 

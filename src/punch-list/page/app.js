@@ -74,11 +74,19 @@ function queueMermaid() {
 }
 
 async function post(path, body = {}) {
-  const res = await fetch(`/b/${encodeURIComponent(boardId)}/${path}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-sidekick-token': token },
-    body: JSON.stringify(body),
-  });
+  let res;
+  try {
+    res = await fetch(`/b/${encodeURIComponent(boardId)}/${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-sidekick-token': token },
+      body: JSON.stringify(body),
+      // Lets a draft save finish even when the page is being closed or reloaded.
+      keepalive: true,
+    });
+  } catch (err) {
+    toast("Can't reach the punch-list server. Your answers are kept here and saved when it's back.");
+    throw err;
+  }
   if (!res.ok) {
     const msg = (await res.json().catch(() => ({}))).error || res.statusText;
     toast(`Couldn't save: ${msg}`);
@@ -155,9 +163,10 @@ async function flushOne(qid) {
   try { await p; } finally { inflight.delete(p); }
 }
 
+/** Saves every answer that isn't on the server yet, including ones whose save failed earlier. */
 async function flushAll() {
-  await Promise.all(Object.keys(saveTimers).map(flushOne));
-  await Promise.all([...inflight]);
+  await Promise.all([...inflight].map((p) => p.catch(() => {})));
+  await Promise.all(Object.keys(local).map(flushOne));
 }
 
 // ---------- question cards ----------
@@ -468,6 +477,7 @@ function pages() {
 
 function buildTabs(root) {
   const ps = pages();
+  if (!ps.length) return;
   if (!ps.some((p) => p.id === ui.tab)) ui.tab = ps[0]?.id;
   const bar = el('div', { class: 'tabs', role: 'tablist' });
   const panel = el('div', { class: 'section' });
@@ -488,6 +498,7 @@ function buildTabs(root) {
 
 function buildWizard(root) {
   const ps = pages();
+  if (!ps.length) return;
   ui.step = Math.min(Math.max(0, ui.step || 0), ps.length - 1);
   const progress = el('div', { class: 'progress' }, el('div'));
   const label = el('span', { class: 'muted' });
@@ -705,12 +716,19 @@ function render(next) {
 function connect() {
   const es = new EventSource(`/b/${encodeURIComponent(boardId)}/stream?t=${encodeURIComponent(token)}`);
   let lostTimer;
+  let lost = false;
   es.addEventListener('state', (e) => {
     clearTimeout(lostTimer);
     $('banner-conn').hidden = true;
     render(JSON.parse(e.data));
+    if (lost) {
+      lost = false;
+      // Back online: save anything that failed while the server was away.
+      flushAll().catch(() => {});
+    }
   });
   es.onerror = () => {
+    lost = true;
     clearTimeout(lostTimer);
     lostTimer = setTimeout(() => ($('banner-conn').hidden = false), 1500);
   };

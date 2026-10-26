@@ -22,7 +22,14 @@ export interface CreateOptions {
 }
 
 const emptyState = (): QState => ({ skipped: false, withdrawn: false, changed: false, explaining: false, explanations: [] });
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+/** JSON with object keys sorted, so key order never counts as a change. */
+const canonical = (x: unknown): string =>
+  JSON.stringify(x, (_k, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v));
+const same = (a: unknown, b: unknown) => canonical(a) === canonical(b);
+
+function checkId(id: string): void {
+  if (!BOARD_ID.test(id)) throw new Error(`board id "${id}" must be lowercase letters, digits and "-" (max 63)`);
+}
 
 /** Every Board on disk, cached in memory. One instance per server process. */
 export class BoardStore {
@@ -31,7 +38,7 @@ export class BoardStore {
   constructor(private readonly onChange: (id: string) => void = () => {}) {}
 
   create(id: string, raw: unknown, opts: CreateOptions = {}): Board {
-    if (!BOARD_ID.test(id)) throw new Error(`board id "${id}" must be lowercase letters, digits and "-" (max 63)`);
+    checkId(id);
     const input = validateBoardInput(raw);
     if (this.exists(id) && !opts.replace) throw new Error(`board "${id}" already exists; use push to change it, or replace to start over`);
     rmSync(paths().boardDir(id), { recursive: true, force: true });
@@ -58,10 +65,12 @@ export class BoardStore {
   }
 
   exists(id: string): boolean {
+    if (!BOARD_ID.test(id)) return false;
     return this.cache.has(id) || existsSync(join(paths().boardDir(id), 'board.json'));
   }
 
   get(id: string): Board {
+    checkId(id);
     const cached = this.cache.get(id);
     if (cached) return cached;
     const file = join(paths().boardDir(id), 'board.json');
@@ -132,6 +141,7 @@ export class BoardStore {
   saveDraft(id: string, qid: string, answer: AnswerValue): Board {
     const board = this.get(id);
     const s = this.state(board, qid);
+    this.reopenForPerson(board);
     board.drafts[qid] = answer.note ? { value: answer.value, note: answer.note } : { value: answer.value };
     if (hasValue(board.drafts[qid])) s.skipped = false;
     return this.commit(board);
@@ -176,6 +186,7 @@ export class BoardStore {
 
   send(id: string): BoardEvent | null {
     const board = this.get(id);
+    this.reopenForPerson(board);
     const qids = this.unsent(board);
     if (qids.length === 0) return null;
     const answers = qids.map((qid) => {
@@ -229,6 +240,13 @@ export class BoardStore {
       this.persist(board);
     }
     return events;
+  }
+
+  /** A person changing answers on a done Board reopens it, so the agent listens again. */
+  private reopenForPerson(board: Board): void {
+    if (!board.done) return;
+    board.done = false;
+    this.event(board, 'reopened', { reason: 'answer changed after done' });
   }
 
   private question(board: Board, qid: string): Question {

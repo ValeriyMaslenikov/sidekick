@@ -102,4 +102,38 @@ describe('server', () => {
     const res = await post('/api/boards', { id: 'errors', input: board });
     expect(res.status).toBe(409);
   });
+
+  it('survives removing a board while a wait is open on it', async () => {
+    const pending = agent('/api/boards/errors/wait?timeout=20');
+    await new Promise((r) => setTimeout(r, 20));
+    await agent('/api/boards/errors', { method: 'DELETE' });
+    const res = await pending;
+    expect(res.status).toBe(404);
+    await new Promise((r) => setTimeout(r, 250));
+    expect((await agent('/api/boards')).status).toBe(200);
+  });
+
+  it('rejects board ids that try to leave the boards directory', async () => {
+    const res = await agent('/api/boards/..%2Fvictim', { method: 'DELETE' });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/board id/);
+  });
+
+  it('does not consume events for a wait whose client went away', async () => {
+    const ac = new AbortController();
+    const pending = Promise.resolve(agent('/api/boards/errors/wait?timeout=20', { signal: ac.signal })).catch(() => null);
+    await new Promise((r) => setTimeout(r, 20));
+    ac.abort();
+    await pending;
+    await post('/b/errors/explain', { qid: 'rows', text: 'lost?' });
+    await new Promise((r) => setTimeout(r, 250));
+    const { events } = await (await agent('/api/boards/errors/wait?timeout=0')).json();
+    expect(events.map((e: { data: { text: string } }) => e.data.text)).toEqual(['lost?']);
+  });
+
+  it('lets the agent close a board', async () => {
+    await post('/api/boards/errors/close', {});
+    expect((await (await agent('/api/boards/errors')).json()).board.done).toBe(true);
+  });
 });
+

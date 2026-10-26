@@ -174,6 +174,7 @@ export function validateLayout(l: unknown, path = 'layout'): Layout {
 
 function validateQuestions(list: unknown, path = 'questions'): Question[] {
   if (!Array.isArray(list)) fail(path, 'must be an array');
+  if (path === 'questions' && list.length === 0) fail(path, 'needs at least one question');
   const seen = new Set<string>();
   return list.map((q, i) => {
     const v = validateQuestion(q, `${path}[${i}]`);

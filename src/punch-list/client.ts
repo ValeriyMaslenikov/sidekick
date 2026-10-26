@@ -10,13 +10,20 @@ export class PortTakenError extends Error {
   }
 }
 
+/** The server answered with an error status (as opposed to not answering at all). */
+export class HttpError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
 export const baseUrl = () => `http://127.0.0.1:${loadConfig().port}`;
 
 type Health = 'ours' | 'foreign' | 'down';
 
 export async function health(): Promise<Health> {
   try {
-    const res = await fetch(`${baseUrl()}/api/health`, { signal: AbortSignal.timeout(1500) });
+    const res = await fetch(`${baseUrl()}/api/health`, { signal: AbortSignal.timeout(5000) });
     const body = (await res.json().catch(() => null)) as { app?: string } | null;
     return body?.app === 'punch-list' ? 'ours' : 'foreign';
   } catch (err) {
@@ -50,6 +57,6 @@ export async function call<T>(method: string, path: string, body?: unknown): Pro
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const json = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(json.error || `${method} ${path} failed with ${res.status}`);
+  if (!res.ok) throw new HttpError(json.error || `${method} ${path} failed with ${res.status}`, res.status);
   return json;
 }
