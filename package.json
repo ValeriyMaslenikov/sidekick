@@ -15,8 +15,8 @@
     "install-skills": "node scripts/install-skills.mjs"
   },
   "dependencies": {
-    "@hono/node-server": "1.13.7",
-    "hono": "4.6.14"
+    "@hono/node-server": "1.19.17",
+    "hono": "4.10.8"
   },
   "devDependencies": {
     "@types/node": "22.10.2",
