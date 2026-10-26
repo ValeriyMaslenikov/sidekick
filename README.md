@@ -23,9 +23,9 @@
 > Your agent has 14 questions for you. Instead of a wall of text in the terminal, you get a live board: one question at a time, the ones that need you first, and a **“Wait, what?”** button on every single one.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/focus-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="docs/assets/focus-light.png">
-  <img alt="punch-list focus view: a sorted question sidebar on the left, the current question in the middle, and Claude's explanation with a table and a flowchart on the right" src="docs/assets/focus-dark.png">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/framed-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/framed-light.png">
+  <img alt="punch-list focus view: a sorted question sidebar on the left, the current question in the middle, and Claude's explanation with a table and a flowchart on the right" src="docs/assets/framed-dark.png">
 </picture>
 
 <sub>The default focus view. Left: every question grouped by what it needs from you. Middle: the current question. Right: the agent's answer to “What happens to mobile users behind a carrier NAT?”, with a table and a diagram.</sub>
