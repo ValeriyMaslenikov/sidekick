@@ -24,7 +24,7 @@ Requires Node 20 or newer. Nothing else: the CLI is a committed single-file bund
 **Claude Code plugin**
 
 ```
-/plugin marketplace add <owner>/sidekick
+/plugin marketplace add ValeriyMaslenikov/sidekick
 /plugin install sidekick@sidekick
 ```
 
@@ -33,7 +33,7 @@ The plugin includes the Stop hook that keeps Claude from ending its turn while o
 **git clone**
 
 ```bash
-git clone https://github.com/<owner>/sidekick ~/Projects/sidekick
+git clone https://github.com/ValeriyMaslenikov/sidekick ~/Projects/sidekick
 cd ~/Projects/sidekick && node scripts/install-skills.mjs
 ```
 
@@ -42,7 +42,7 @@ This symlinks each skill into `~/.claude/skills` and `~/.agents/skills` and adds
 **npx skills**
 
 ```bash
-npx skills add <owner>/sidekick
+npx skills add ValeriyMaslenikov/sidekick
 ```
 
 ## Use
