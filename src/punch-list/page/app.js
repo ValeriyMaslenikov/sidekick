@@ -983,6 +983,48 @@ $('toggleSide').addEventListener('click', toggleSidebar);
   try { saved = localStorage.getItem('pl-sidebar'); } catch {}
   setCollapsed(saved ? saved === 'collapsed' : innerWidth < 1100);
 }
+// ---------- explanation panel width (drag, arrow keys; remembered per browser) ----------
+
+const INSP_DEFAULT = 380;
+const inspMax = () => Math.max(300, Math.min(900, innerWidth - 640));
+function setInspWidth(w, save = true) {
+  const width = Math.round(Math.min(inspMax(), Math.max(280, w)));
+  $('app').style.setProperty('--inspector', `${width}px`);
+  $('inspResizer').setAttribute('aria-valuenow', String(width));
+  if (save) try { localStorage.setItem('pl-inspector', String(width)); } catch {}
+  return width;
+}
+{
+  const r = $('inspResizer');
+  r.setAttribute('aria-valuemin', '280');
+  r.setAttribute('aria-valuemax', String(inspMax()));
+  let saved = null;
+  try { saved = Number(localStorage.getItem('pl-inspector')); } catch {}
+  setInspWidth(saved || INSP_DEFAULT, false);
+  r.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    try { r.setPointerCapture(e.pointerId); } catch {}
+    r.classList.add('dragging');
+    document.body.classList.add('resizing');
+    const right = $('inspector').getBoundingClientRect().right;
+    const move = (ev) => setInspWidth(right - ev.clientX, false);
+    const up = (ev) => {
+      setInspWidth(right - ev.clientX);
+      r.classList.remove('dragging');
+      document.body.classList.remove('resizing');
+      r.removeEventListener('pointermove', move);
+      r.removeEventListener('pointerup', up);
+    };
+    r.addEventListener('pointermove', move);
+    r.addEventListener('pointerup', up);
+  });
+  r.addEventListener('dblclick', () => setInspWidth(INSP_DEFAULT));
+  r.addEventListener('keydown', (e) => {
+    const cur = parseInt(getComputedStyle($('app')).getPropertyValue('--inspector'), 10) || INSP_DEFAULT;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); setInspWidth(cur + 24); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); setInspWidth(cur - 24); }
+  });
+}
 matchMedia('(min-width: 1400px)').addEventListener('change', () => { if (isFocus()) { focus.hardKey = null; renderFocus(); } });
 
 // ---------- keyboard ----------
