@@ -8,7 +8,8 @@ When an agent has a pile of questions for you, reading twenty of them in a termi
 
 - answer in any order, skip and come back, add a note to any answer;
 - press **"Wait, what? Explain better"** on any question (optionally with your own question), keep going, and the agent's explanation (text, tables, diagrams) appears under it live;
-- the agent picks a layout that fits: a list, tabs, a wizard, Jira-like columns, or its own page;
+- by default you see one question at a time, the ones that need you first, with a sidebar of every question by status and the agent's explanations in a side panel; keyboard-first (`1`–`9`, `↵`, `e`, `?`, `s`, `⌘B`);
+- the agent can switch to a list, tabs, a wizard, Jira-like columns, or its own page when that fits better;
 - press **Send to Claude** whenever you like; the agent gets the answers while you keep working, and can add follow-up questions;
 - the agent listens in the background, so the terminal stays free for normal chat; if it stops listening, the page says so and gives you a prompt to paste.
 

@@ -4,43 +4,65 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>punch-list</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/assets/styles.css">
 </head>
-<body>
-<div class="page">
-  <header class="head">
-    <div class="eyebrow"><span class="brand">punch-list</span><span id="board-id"></span></div>
-    <h1 id="title">Loading…</h1>
-    <div id="intro" class="intro rich"></div>
+<body class="shell">
+<a class="skip-link" href="#main">Skip to the questions</a>
+<div class="sr" role="status" aria-atomic="true" id="live"></div>
+<div class="app" id="app">
+  <header class="titlebar">
+    <button type="button" class="icon-btn" id="toggleSide" aria-controls="sidebar" aria-expanded="true" title="Toggle question list (⌘B or L)">
+      <svg class="g" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M6 2.5v11" stroke="currentColor" stroke-width="1.3"/></svg>
+      <span class="sr">Toggle question list</span>
+    </button>
+    <nav class="crumbs" aria-label="Breadcrumb"><b>punch-list</b><span class="sep">/</span><span id="crumbBoard"></span><span class="sep" id="crumbSep">/</span><span class="cur" id="crumbQ"></span></nav>
   </header>
 
-  <div id="banner-conn" class="banner warn" hidden>Lost connection to the punch-list server. Reconnecting…</div>
-  <div id="banner-listen" class="banner warn" hidden>
-    <div><strong>Claude isn't listening.</strong> Your answers are saved. Paste this into your agent to pick the board back up:</div>
-    <div class="copyrow"><code id="resume-prompt"></code><button type="button" class="btn small" id="copy-resume">Copy</button></div>
-  </div>
-  <div id="banner-done" class="banner ok" hidden>
-    <span>Marked done. Claude has your answers.</span>
-    <button type="button" class="btn small ghost" id="reopen">Reopen</button>
-  </div>
+  <nav class="sidebar" id="sidebar" aria-label="Questions">
+    <div class="side-head"><span>Questions</span></div>
+    <div class="side-scroll" id="sideList"></div>
+  </nav>
 
-  <main id="board" class="board"></main>
-</div>
-
-<div class="bar" id="bar">
-  <div class="bar-in">
-    <div class="counts" id="counts"></div>
-    <div class="actions" id="actions">
-      <span class="listen-dot" id="listen-dot" title=""></span>
-      <button type="button" class="btn" id="send">Send to Claude</button>
-      <button type="button" class="btn ghost" id="done">Done</button>
+  <main class="main" id="main" tabindex="-1">
+    <div class="main-in" id="mainIn">
+      <div class="board-head"><h1 id="title">Loading…</h1><div id="intro" class="intro rich"></div></div>
+      <div id="banner-conn" class="banner warn" hidden>Lost connection to the punch-list server. Reconnecting…</div>
+      <div id="banner-listen" class="banner warn" hidden>
+        <div><strong>Claude isn't listening.</strong> Your answers are saved. Paste this into your agent to pick the board back up:</div>
+        <div class="copyrow"><code id="resume-prompt"></code><button type="button" class="btn small" id="copy-resume">Copy</button></div>
+      </div>
+      <div id="banner-done" class="banner ok" hidden>
+        <span>Marked done. Claude has your answers.</span>
+        <button type="button" class="btn small ghost" id="reopen">Reopen</button>
+      </div>
+      <div id="progress" class="progress"></div>
+      <div id="board" class="board"></div>
     </div>
-    <div class="actions" id="confirm-done" hidden>
+  </main>
+
+  <aside class="inspector" id="inspector" aria-label="Explanation">
+    <div class="insp-head"><span>Explanation</span><span><kbd>?</kbd> ask</span></div>
+    <div class="insp-body" id="inspBody"></div>
+  </aside>
+
+  <footer class="statusbar">
+    <span class="live" id="listen"><i></i><span id="listenText">listening</span></span>
+    <span class="counts" id="sbCounts"></span>
+    <span class="spacer"></span>
+    <span id="sbUnsent"></span>
+    <span class="confirm" id="confirm-done" hidden>
       <span id="confirm-text"></span>
-      <button type="button" class="btn ghost" id="keep">Keep answering</button>
-      <button type="button" class="btn" id="done-anyway">Mark done anyway</button>
-    </div>
-  </div>
+      <button type="button" class="sb-btn" id="keep">Keep answering</button>
+      <button type="button" class="sb-btn primary" id="done-anyway">Mark done anyway</button>
+    </span>
+    <span id="actions" style="display:flex">
+      <button type="button" class="sb-btn primary" id="send">Send to Claude <kbd>⌘↵</kbd></button>
+      <button type="button" class="sb-btn" id="done">Done</button>
+    </span>
+  </footer>
 </div>
 
 <div class="modal" id="modal" hidden>
@@ -50,7 +72,6 @@
     <div id="modal-body"></div>
   </div>
 </div>
-
 <div class="toast" id="toast" hidden></div>
 <script type="module" src="/assets/app.js"></script>
 </body>

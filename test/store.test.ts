@@ -149,5 +149,13 @@ describe('BoardStore', () => {
     expect(() => store.get('../x')).toThrow(/board id/);
     expect(store.exists('../x')).toBe(false);
   });
+
+  it('uses the focus layout by default and accepts it explicitly', () => {
+    store.create('errors', input(), opts);
+    expect(store.get('errors').layout).toEqual({ type: 'focus' });
+    store.push('errors', { layout: { type: 'list' } });
+    store.push('errors', { layout: { type: 'focus' } });
+    expect(store.get('errors').layout.type).toBe('focus');
+  });
 });
 

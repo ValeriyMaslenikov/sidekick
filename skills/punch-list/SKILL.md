@@ -40,7 +40,7 @@ No install step; the server starts itself.
 
 - One Question per decision. Put the recommended option first with `"recommended": true` and say why in its `detail`.
 - Give each Question the context needed to answer it in `body` (HTML): what it's about, what changes depending on the answer. The person shouldn't need to scroll back through the terminal.
-- Pick a Layout for the job: `list` for a handful, `tabs` or `wizard` for many Questions in themes (set `layout.groups` and each Question's `group`), `columns` for triage-style boards, `custom` when nothing fits. If the person asks for a different arrangement, push a new `layout`.
+- Leave `layout` out to get `focus`, the default: one Question at a time, the ones that need the person first, with a status sidebar and your Explanations in a side panel. It suits almost every Board. Use `list`, `tabs` or `wizard` (with `layout.groups` and each Question's `group`) when the person wants to see many Questions at once, `columns` for triage-style boards, `custom` when nothing fits. If the person asks for a different arrangement, push a new `layout`.
 - Use `showIf` for instant follow-ups that need no thinking ("show Q4 when Q3 is yes"); push new Questions for follow-ups that do.
 - Answer types: `yes-no`, `single`, `multi`, `text`, `number`, `scale`, `rank`, `custom`. Every Question also has an optional note.
 - Requests that aren't about one Question ("use tabs", "add a question about X") come to you in the terminal; apply them with `push`.

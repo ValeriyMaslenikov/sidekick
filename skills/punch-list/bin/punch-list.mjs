@@ -2404,7 +2404,7 @@ import { join as join2 } from "node:path";
 
 // src/punch-list/model.ts
 var QUESTION_TYPES = ["yes-no", "single", "multi", "text", "number", "scale", "rank", "custom"];
-var LAYOUT_TYPES = ["list", "tabs", "wizard", "columns", "custom"];
+var LAYOUT_TYPES = ["focus", "list", "tabs", "wizard", "columns", "custom"];
 var BOARD_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
 var QUESTION_ID = /^[A-Za-z0-9_-]{1,64}$/;
 var NEEDS_OPTIONS = ["single", "multi", "rank"];
@@ -2518,7 +2518,7 @@ var BoardStore = class {
       id,
       title: input.title,
       intro: input.intro,
-      layout: input.layout ?? { type: "list" },
+      layout: input.layout ?? { type: "focus" },
       questions: input.questions,
       qstate: Object.fromEntries(input.questions.map((q) => [q.id, emptyState()])),
       drafts: {},
@@ -2763,6 +2763,8 @@ var page_default = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>punch-list boards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body>
@@ -2807,43 +2809,65 @@ var board_default = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>punch-list</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/assets/styles.css">
 </head>
-<body>
-<div class="page">
-  <header class="head">
-    <div class="eyebrow"><span class="brand">punch-list</span><span id="board-id"></span></div>
-    <h1 id="title">Loading\u2026</h1>
-    <div id="intro" class="intro rich"></div>
+<body class="shell">
+<a class="skip-link" href="#main">Skip to the questions</a>
+<div class="sr" role="status" aria-atomic="true" id="live"></div>
+<div class="app" id="app">
+  <header class="titlebar">
+    <button type="button" class="icon-btn" id="toggleSide" aria-controls="sidebar" aria-expanded="true" title="Toggle question list (\u2318B or L)">
+      <svg class="g" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M6 2.5v11" stroke="currentColor" stroke-width="1.3"/></svg>
+      <span class="sr">Toggle question list</span>
+    </button>
+    <nav class="crumbs" aria-label="Breadcrumb"><b>punch-list</b><span class="sep">/</span><span id="crumbBoard"></span><span class="sep" id="crumbSep">/</span><span class="cur" id="crumbQ"></span></nav>
   </header>
 
-  <div id="banner-conn" class="banner warn" hidden>Lost connection to the punch-list server. Reconnecting\u2026</div>
-  <div id="banner-listen" class="banner warn" hidden>
-    <div><strong>Claude isn't listening.</strong> Your answers are saved. Paste this into your agent to pick the board back up:</div>
-    <div class="copyrow"><code id="resume-prompt"></code><button type="button" class="btn small" id="copy-resume">Copy</button></div>
-  </div>
-  <div id="banner-done" class="banner ok" hidden>
-    <span>Marked done. Claude has your answers.</span>
-    <button type="button" class="btn small ghost" id="reopen">Reopen</button>
-  </div>
+  <nav class="sidebar" id="sidebar" aria-label="Questions">
+    <div class="side-head"><span>Questions</span></div>
+    <div class="side-scroll" id="sideList"></div>
+  </nav>
 
-  <main id="board" class="board"></main>
-</div>
-
-<div class="bar" id="bar">
-  <div class="bar-in">
-    <div class="counts" id="counts"></div>
-    <div class="actions" id="actions">
-      <span class="listen-dot" id="listen-dot" title=""></span>
-      <button type="button" class="btn" id="send">Send to Claude</button>
-      <button type="button" class="btn ghost" id="done">Done</button>
+  <main class="main" id="main" tabindex="-1">
+    <div class="main-in" id="mainIn">
+      <div class="board-head"><h1 id="title">Loading\u2026</h1><div id="intro" class="intro rich"></div></div>
+      <div id="banner-conn" class="banner warn" hidden>Lost connection to the punch-list server. Reconnecting\u2026</div>
+      <div id="banner-listen" class="banner warn" hidden>
+        <div><strong>Claude isn't listening.</strong> Your answers are saved. Paste this into your agent to pick the board back up:</div>
+        <div class="copyrow"><code id="resume-prompt"></code><button type="button" class="btn small" id="copy-resume">Copy</button></div>
+      </div>
+      <div id="banner-done" class="banner ok" hidden>
+        <span>Marked done. Claude has your answers.</span>
+        <button type="button" class="btn small ghost" id="reopen">Reopen</button>
+      </div>
+      <div id="progress" class="progress"></div>
+      <div id="board" class="board"></div>
     </div>
-    <div class="actions" id="confirm-done" hidden>
+  </main>
+
+  <aside class="inspector" id="inspector" aria-label="Explanation">
+    <div class="insp-head"><span>Explanation</span><span><kbd>?</kbd> ask</span></div>
+    <div class="insp-body" id="inspBody"></div>
+  </aside>
+
+  <footer class="statusbar">
+    <span class="live" id="listen"><i></i><span id="listenText">listening</span></span>
+    <span class="counts" id="sbCounts"></span>
+    <span class="spacer"></span>
+    <span id="sbUnsent"></span>
+    <span class="confirm" id="confirm-done" hidden>
       <span id="confirm-text"></span>
-      <button type="button" class="btn ghost" id="keep">Keep answering</button>
-      <button type="button" class="btn" id="done-anyway">Mark done anyway</button>
-    </div>
-  </div>
+      <button type="button" class="sb-btn" id="keep">Keep answering</button>
+      <button type="button" class="sb-btn primary" id="done-anyway">Mark done anyway</button>
+    </span>
+    <span id="actions" style="display:flex">
+      <button type="button" class="sb-btn primary" id="send">Send to Claude <kbd>\u2318\u21B5</kbd></button>
+      <button type="button" class="sb-btn" id="done">Done</button>
+    </span>
+  </footer>
 </div>
 
 <div class="modal" id="modal" hidden>
@@ -2853,7 +2877,6 @@ var board_default = `<!doctype html>
     <div id="modal-body"></div>
   </div>
 </div>
-
 <div class="toast" id="toast" hidden></div>
 <script type="module" src="/assets/app.js"></script>
 </body>
@@ -2861,10 +2884,1105 @@ var board_default = `<!doctype html>
 `;
 
 // raw:/Users/valeriimaslenykov/Projects/personal/sidekick/src/punch-list/page/app.js
-var app_default = "// punch-list Board page. Renders the Board the server streams over SSE, keeps the\n// person's typing local until it is saved, and talks back with small POSTs.\n\nconst token = new URLSearchParams(location.search).get('t') || '';\nconst boardId = decodeURIComponent(location.pathname.split('/')[2] || '');\nconst $ = (id) => document.getElementById(id);\n\nlet view = null;\n/** Answers typed here but not yet confirmed saved by the server: qid -> {value, note}. */\nconst local = {};\nconst saveTimers = {};\nconst inflight = new Set();\n/** qid -> { el, parts, keys } */\nconst cards = new Map();\nlet layoutKey = null;\nlet modal = null; // { qid, parent, next }\nconst listeners = {};\nconst ui = loadUi();\n\n// ---------- helpers ----------\n\nfunction el(tag, attrs = {}, ...kids) {\n  const n = document.createElement(tag);\n  for (const [k, v] of Object.entries(attrs)) {\n    if (v === undefined || v === null || v === false) continue;\n    if (k === 'class') n.className = v;\n    else if (k === 'text') n.textContent = v;\n    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);\n    else n.setAttribute(k, v === true ? '' : v);\n  }\n  for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false) n.append(kid);\n  return n;\n}\n\nfunction loadUi() {\n  try { return JSON.parse(localStorage.getItem(`pl:${boardId}:ui`) || '{}'); } catch { return {}; }\n}\nfunction saveUi() {\n  try { localStorage.setItem(`pl:${boardId}:ui`, JSON.stringify(ui)); } catch {}\n}\n\n/** Inserts agent HTML and runs any scripts in it (innerHTML alone never runs them). */\nfunction setRich(node, html) {\n  node.innerHTML = html || '';\n  for (const old of node.querySelectorAll('script')) {\n    const s = document.createElement('script');\n    for (const a of old.attributes) s.setAttribute(a.name, a.value);\n    s.textContent = old.textContent;\n    old.replaceWith(s);\n  }\n  queueMermaid();\n}\n\nlet mermaidQueued = false;\nlet mermaidLib = null;\nfunction queueMermaid() {\n  if (mermaidQueued) return;\n  mermaidQueued = true;\n  requestAnimationFrame(async () => {\n    mermaidQueued = false;\n    const pending = document.querySelectorAll('.mermaid:not([data-processed])');\n    if (!pending.length) return;\n    try {\n      if (!mermaidLib) {\n        mermaidLib = (await import('https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs')).default;\n        const dark = matchMedia('(prefers-color-scheme: dark)').matches;\n        mermaidLib.initialize({ startOnLoad: false, theme: dark ? 'dark' : 'default' });\n      }\n      await mermaidLib.run({ nodes: [...pending] });\n    } catch (err) {\n      console.warn('punch-list: mermaid failed', err);\n    }\n  });\n}\n\nasync function post(path, body = {}) {\n  let res;\n  try {\n    res = await fetch(`/b/${encodeURIComponent(boardId)}/${path}`, {\n      method: 'POST',\n      headers: { 'content-type': 'application/json', 'x-sidekick-token': token },\n      body: JSON.stringify(body),\n      // Lets a draft save finish even when the page is being closed or reloaded.\n      keepalive: true,\n    });\n  } catch (err) {\n    toast(\"Can't reach the punch-list server. Your answers are kept here and saved when it's back.\");\n    throw err;\n  }\n  if (!res.ok) {\n    const msg = (await res.json().catch(() => ({}))).error || res.statusText;\n    toast(`Couldn't save: ${msg}`);\n    throw new Error(msg);\n  }\n  return res.json();\n}\n\nlet toastTimer;\nfunction toast(text) {\n  const t = $('toast');\n  t.textContent = text;\n  t.hidden = false;\n  clearTimeout(toastTimer);\n  toastTimer = setTimeout(() => (t.hidden = true), 2600);\n}\n\nfunction hasValue(a) {\n  if (!a) return false;\n  const v = a.value;\n  if (v === undefined || v === null) return false;\n  if (typeof v === 'string') return v.trim() !== '';\n  if (Array.isArray(v)) return v.length > 0;\n  return true;\n}\n\nfunction answerOf(qid) {\n  return local[qid] ?? view?.drafts?.[qid];\n}\n\nfunction statusOf(q) {\n  if (q.state?.withdrawn) return 'withdrawn';\n  if (hasValue(answerOf(q.id))) return 'answered';\n  if (q.state?.skipped) return 'skipped';\n  return 'open';\n}\n\nfunction isUnsent(qid) {\n  return view.unsent.includes(qid) || qid in local;\n}\n\nfunction visible(q) {\n  if (!q.showIf) return true;\n  return Object.entries(q.showIf).every(([dep, want]) => {\n    const got = answerOf(dep)?.value;\n    const wants = Array.isArray(want) ? want.map(String) : [String(want)];\n    if (Array.isArray(got)) return got.some((g) => wants.includes(String(g)));\n    return got !== undefined && got !== null && wants.includes(String(got));\n  });\n}\n\n// ---------- answers ----------\n\nfunction setAnswer(qid, patch) {\n  const cur = answerOf(qid) || { value: null };\n  const next = { ...cur, ...patch };\n  if (!next.note) delete next.note;\n  local[qid] = next;\n  clearTimeout(saveTimers[qid]);\n  saveTimers[qid] = setTimeout(() => flushOne(qid), 400);\n  refreshDerived();\n  emit('answer', { qid, answer: next });\n}\n\nasync function flushOne(qid) {\n  clearTimeout(saveTimers[qid]);\n  delete saveTimers[qid];\n  const answer = local[qid];\n  if (!answer) return;\n  const p = post('draft', { qid, answer }).then(() => {\n    if (local[qid] === answer) delete local[qid];\n  });\n  inflight.add(p);\n  try { await p; } finally { inflight.delete(p); }\n}\n\n/** Saves every answer that isn't on the server yet, including ones whose save failed earlier. */\nasync function flushAll() {\n  await Promise.all([...inflight].map((p) => p.catch(() => {})));\n  await Promise.all(Object.keys(local).map(flushOne));\n}\n\n// ---------- question cards ----------\n\nfunction defKey(q) {\n  const { state, status, ...def } = q;\n  return JSON.stringify([def, state?.changed, state?.withdrawn, state?.withdrawReason]);\n}\nfunction threadKey(q) {\n  return JSON.stringify([q.state?.explanations, q.state?.explaining, q.state?.pendingQuestion]);\n}\n\nfunction makeCard(q) {\n  const parts = {\n    head: el('div', { class: 'card-head' }),\n    body: el('div', { class: 'card-body rich' }),\n    notice: el('div'),\n    input: el('div', { class: 'card-input' }),\n    note: el('div'),\n    thread: el('div', { class: 'thread' }),\n    ask: el('div'),\n    actions: el('div', { class: 'card-actions' }),\n  };\n  const node = el('section', { class: 'card', 'data-qid': q.id }, Object.values(parts));\n  const card = { el: node, parts, keys: {} };\n  cards.set(q.id, card);\n  return card;\n}\n\nfunction updateCard(q) {\n  const card = cards.get(q.id) || makeCard(q);\n  const { parts, keys } = card;\n  const dk = defKey(q);\n  const focusedInside = card.el.contains(document.activeElement) && document.activeElement !== document.body;\n\n  if (keys.def !== dk) {\n    keys.def = dk;\n    renderHead(q, parts.head);\n    setRich(parts.body, q.body);\n    parts.body.hidden = !q.body;\n    renderNotice(q, parts.notice);\n    renderInput(q, parts.input);\n    renderNote(q, parts.note);\n    renderActions(q, parts.actions, parts.ask);\n    keys.draft = JSON.stringify(view.drafts[q.id]);\n  } else {\n    // Another tab or a reload changed the saved answer: show it unless the person is typing here.\n    const dkey = JSON.stringify(view.drafts[q.id]);\n    if (keys.draft !== dkey && !(q.id in local) && !focusedInside) {\n      renderInput(q, parts.input);\n      renderNote(q, parts.note);\n    }\n    keys.draft = dkey;\n  }\n\n  const tk = threadKey(q);\n  if (keys.thread !== tk) {\n    keys.thread = tk;\n    renderThread(q, parts.thread);\n  }\n  refreshCardStatus(q, card);\n  return card;\n}\n\nfunction refreshCardStatus(q, card) {\n  const status = statusOf(q);\n  card.el.classList.toggle('is-answered', status === 'answered');\n  card.el.classList.toggle('is-withdrawn', status === 'withdrawn');\n  card.el.classList.toggle('is-changed', !!q.state?.changed);\n  const meta = card.parts.head.querySelector('.card-meta');\n  if (meta) {\n    meta.querySelector('[data-chip=status]').replaceWith(statusChip(q, status));\n    const unsent = meta.querySelector('[data-chip=unsent]');\n    unsent.hidden = !isUnsent(q.id) || status === 'withdrawn';\n  }\n  const skipBtn = card.parts.actions.querySelector('[data-act=skip]');\n  if (skipBtn) {\n    skipBtn.textContent = q.state?.skipped ? 'Unskip' : 'Skip for now';\n    skipBtn.hidden = status === 'answered' || status === 'withdrawn';\n  }\n  card.el.hidden = !visible(q);\n}\n\nfunction statusChip(q, status) {\n  const label = q.state?.changed ? 'changed' : q.state?.explaining ? 'explaining' : status;\n  const tone = q.state?.changed ? 'attn' : q.state?.explaining ? 'accent' : status === 'answered' ? 'ok' : status === 'skipped' ? 'attn' : '';\n  return el('span', { class: `chip ${tone}`, 'data-chip': 'status', text: label });\n}\n\nfunction renderHead(q, head) {\n  head.replaceChildren(\n    el('h3', { class: 'card-title', text: q.title }),\n    el('div', { class: 'card-meta' },\n      el('span', { 'data-chip': 'status' }),\n      el('span', { class: 'chip accent', 'data-chip': 'unsent', text: 'unsent', title: 'Not sent to Claude yet' }),\n      view.layout.type === 'columns' ? null : el('button', { type: 'button', class: 'btn small link', title: 'Open in a larger view', text: 'Expand', onclick: () => openModal(q.id) }),\n    ),\n  );\n}\n\nfunction renderNotice(q, box) {\n  box.replaceChildren();\n  if (q.state?.withdrawn) {\n    box.append(el('div', { class: 'notice muted-box', text: `Withdrawn${q.state.withdrawReason ? `: ${q.state.withdrawReason}` : ''}` }));\n  } else if (q.state?.changed) {\n    box.append(el('div', { class: 'notice attn' },\n      el('span', { text: 'Claude changed this question after you answered. Check your answer.' }),\n      el('button', { type: 'button', class: 'btn small ghost', text: 'My answer still stands', onclick: () => post('confirm', { qid: q.id }) }),\n    ));\n  }\n}\n\nfunction renderInput(q, box) {\n  box.replaceChildren();\n  if (q.state?.withdrawn) return;\n  const cur = answerOf(q.id)?.value;\n  const name = `q-${q.id}`;\n  switch (q.type) {\n    case 'yes-no':\n      box.append(seg([['yes', 'Yes'], ['no', 'No']], cur, (v) => setAnswer(q.id, { value: v })));\n      break;\n    case 'single':\n    case 'multi': {\n      const multi = q.type === 'multi';\n      const chosen = new Set(multi ? (Array.isArray(cur) ? cur : []) : [cur]);\n      box.append(el('div', { class: 'opts', role: multi ? 'group' : 'radiogroup' },\n        (q.options || []).map((o) => {\n          const input = el('input', { type: multi ? 'checkbox' : 'radio', name, value: o.value, checked: chosen.has(o.value) });\n          input.addEventListener('change', () => {\n            if (!multi) return setAnswer(q.id, { value: o.value });\n            const now = new Set(Array.isArray(answerOf(q.id)?.value) ? answerOf(q.id).value : []);\n            input.checked ? now.add(o.value) : now.delete(o.value);\n            setAnswer(q.id, { value: (q.options || []).map((x) => x.value).filter((v) => now.has(v)) });\n          });\n          const label = el('span', { class: 'opt-label' }, el('span', { class: 'rich' }));\n          setRich(label.firstChild, o.label);\n          if (o.recommended) label.append(el('span', { class: 'chip attn', text: 'recommended' }));\n          const body = el('span', { class: 'rich' }, label);\n          if (o.detail) {\n            const d = el('span', { class: 'opt-detail rich' });\n            setRich(d, o.detail);\n            body.append(d);\n          }\n          return el('label', { class: 'opt' }, input, body);\n        }),\n      ));\n      break;\n    }\n    case 'text': {\n      const ta = el('textarea', { name, placeholder: 'Type your answer' });\n      ta.value = typeof cur === 'string' ? cur : '';\n      ta.addEventListener('input', () => setAnswer(q.id, { value: ta.value }));\n      box.append(ta);\n      break;\n    }\n    case 'number': {\n      const inp = el('input', { type: 'number', name, min: q.min, max: q.max, step: q.step });\n      inp.value = cur ?? '';\n      inp.addEventListener('input', () => setAnswer(q.id, { value: inp.value === '' ? null : Number(inp.value) }));\n      box.append(inp);\n      break;\n    }\n    case 'scale': {\n      const min = q.min ?? 1, max = q.max ?? 5, step = q.step ?? 1;\n      const vals = [];\n      for (let v = min; v <= max + 1e-9; v += step) vals.push([v, String(v)]);\n      box.append(seg(vals, cur, (v) => setAnswer(q.id, { value: v })));\n      break;\n    }\n    case 'rank':\n      box.append(rankList(q, cur));\n      break;\n    case 'custom':\n      if (hasValue(answerOf(q.id))) box.append(el('div', { class: 'muted', text: `Recorded: ${JSON.stringify(cur)}` }));\n      break;\n  }\n}\n\nfunction seg(values, cur, onPick) {\n  return el('div', { class: 'seg' },\n    values.map(([v, label]) =>\n      el('button', { type: 'button', class: 'btn ghost', 'aria-pressed': String(cur === v), text: label, onclick: (e) => {\n        for (const b of e.currentTarget.parentNode.children) b.setAttribute('aria-pressed', String(b === e.currentTarget));\n        onPick(v);\n      } }),\n    ),\n  );\n}\n\nfunction rankList(q, cur) {\n  const all = (q.options || []).map((o) => o.value);\n  const order = Array.isArray(cur) ? [...cur.filter((v) => all.includes(v)), ...all.filter((v) => !cur.includes(v))] : all;\n  const labelOf = (v) => q.options.find((o) => o.value === v)?.label ?? v;\n  const move = (i, d) => {\n    const next = [...order];\n    [next[i], next[i + d]] = [next[i + d], next[i]];\n    setAnswer(q.id, { value: next });\n    renderInput(q, cards.get(q.id).parts.input);\n  };\n  const list = el('ol', { class: 'rank' },\n    order.map((v, i) => el('li', {},\n      el('span', { text: labelOf(v) }),\n      el('button', { type: 'button', class: 'btn small ghost', text: '\u2191', 'aria-label': 'Move up', disabled: i === 0, onclick: () => move(i, -1) }),\n      el('button', { type: 'button', class: 'btn small ghost', text: '\u2193', 'aria-label': 'Move down', disabled: i === order.length - 1, onclick: () => move(i, 1) }),\n    )),\n  );\n  const wrap = el('div', { class: 'section' }, list);\n  if (!Array.isArray(cur)) wrap.append(el('button', { type: 'button', class: 'btn small ghost', text: 'This order is fine', onclick: () => { setAnswer(q.id, { value: order }); renderInput(q, cards.get(q.id).parts.input); } }));\n  return wrap;\n}\n\nfunction renderNote(q, box) {\n  box.replaceChildren();\n  if (q.state?.withdrawn) return;\n  const note = answerOf(q.id)?.note || '';\n  const ta = el('textarea', { placeholder: 'Note for Claude (optional)', rows: 2 });\n  ta.value = note;\n  ta.style.minHeight = '44px';\n  ta.addEventListener('input', () => setAnswer(q.id, { note: ta.value }));\n  if (note) return box.append(ta);\n  const toggle = el('button', { type: 'button', class: 'btn small link note-toggle', text: '+ Add a note', onclick: () => { toggle.replaceWith(ta); ta.focus(); } });\n  box.append(toggle);\n}\n\nfunction renderThread(q, box) {\n  box.replaceChildren();\n  for (const x of q.state?.explanations || []) {\n    const item = el('div', { class: 'expl' });\n    if (x.question) item.append(el('div', { class: 'expl-q' }, el('strong', { text: 'You asked: ' }), document.createTextNode(x.question)));\n    const body = el('div', { class: 'rich' });\n    setRich(body, x.html);\n    item.append(body);\n    box.append(item);\n  }\n  if (q.state?.explaining) {\n    box.append(el('div', { class: 'explaining' },\n      el('span', { class: 'dots', text: 'Claude is explaining' }),\n      q.state.pendingQuestion ? el('span', { class: 'muted', text: `(${q.state.pendingQuestion})` }) : null,\n    ));\n  }\n}\n\nfunction renderActions(q, actions, ask) {\n  actions.replaceChildren();\n  ask.replaceChildren();\n  if (q.state?.withdrawn) return;\n  const askBox = () => {\n    const ta = el('textarea', { placeholder: \"What's unclear? Ask your own question, or leave empty for a simpler explanation.\" });\n    const submit = async () => {\n      await post('explain', { qid: q.id, text: ta.value });\n      ask.replaceChildren();\n    };\n    ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(); });\n    ask.replaceChildren(el('div', { class: 'ask' }, ta,\n      el('div', { class: 'card-actions' },\n        el('button', { type: 'button', class: 'btn small', text: 'Ask Claude', onclick: submit }),\n        el('button', { type: 'button', class: 'btn small ghost', text: 'Cancel', onclick: () => ask.replaceChildren() }),\n      )));\n    ta.focus();\n  };\n  actions.append(\n    el('button', { type: 'button', class: 'btn small ghost', text: 'Wait, what? Explain better', onclick: askBox }),\n    el('button', { type: 'button', class: 'btn small link', 'data-act': 'skip', onclick: () => post('skip', { qid: q.id, skipped: !q.state?.skipped }) }),\n  );\n}\n\n// ---------- layouts ----------\n\nfunction groupsOf() {\n  const qs = view.questions;\n  const defined = view.layout.groups || [];\n  if (!defined.length) return null;\n  const ids = new Set(defined.map((g) => g.id));\n  const groups = defined.map((g) => ({ ...g, qs: qs.filter((q) => q.group === g.id) }));\n  const rest = qs.filter((q) => !ids.has(q.group));\n  if (rest.length) groups.push({ id: '_other', title: 'Other', qs: rest });\n  return groups.filter((g) => g.qs.length);\n}\n\nfunction computeLayoutKey() {\n  return JSON.stringify([view.layout, view.questions.map((q) => [q.id, q.group])]);\n}\n\nfunction buildLayout() {\n  closeModal();\n  const root = $('board');\n  root.replaceChildren();\n  const type = view.layout.type;\n  for (const q of view.questions) updateCard(q);\n  if (type === 'tabs') buildTabs(root);\n  else if (type === 'wizard') buildWizard(root);\n  else if (type === 'columns') buildColumns(root);\n  else if (type === 'custom') buildCustom(root);\n  else buildList(root);\n}\n\nfunction buildList(root) {\n  const groups = groupsOf();\n  if (!groups) return root.append(...view.questions.map((q) => cards.get(q.id).el));\n  for (const g of groups) root.append(el('div', { class: 'section' }, el('h2', { text: g.title }), g.qs.map((q) => cards.get(q.id).el)));\n}\n\nfunction pages() {\n  const groups = groupsOf();\n  if (groups) return groups;\n  return view.questions.map((q, i) => ({ id: q.id, title: `${i + 1}. ${q.title.length > 28 ? q.title.slice(0, 27) + '\u2026' : q.title}`, qs: [q] }));\n}\n\nfunction buildTabs(root) {\n  const ps = pages();\n  if (!ps.length) return;\n  if (!ps.some((p) => p.id === ui.tab)) ui.tab = ps[0]?.id;\n  const bar = el('div', { class: 'tabs', role: 'tablist' });\n  const panel = el('div', { class: 'section' });\n  const show = (id) => {\n    ui.tab = id;\n    saveUi();\n    for (const b of bar.children) b.setAttribute('aria-selected', String(b.dataset.id === id));\n    panel.replaceChildren(...ps.find((p) => p.id === id).qs.map((q) => cards.get(q.id).el));\n    queueMermaid();\n  };\n  for (const p of ps) {\n    bar.append(el('button', { type: 'button', class: 'tab', role: 'tab', 'data-id': p.id, onclick: () => show(p.id) },\n      el('span', { text: p.title }), el('span', { class: 'count', 'data-count': p.id })));\n  }\n  root.append(bar, panel);\n  show(ui.tab);\n}\n\nfunction buildWizard(root) {\n  const ps = pages();\n  if (!ps.length) return;\n  ui.step = Math.min(Math.max(0, ui.step || 0), ps.length - 1);\n  const progress = el('div', { class: 'progress' }, el('div'));\n  const label = el('span', { class: 'muted' });\n  const panel = el('div', { class: 'section' });\n  const back = el('button', { type: 'button', class: 'btn ghost', text: 'Back' });\n  const next = el('button', { type: 'button', class: 'btn', text: 'Next' });\n  const show = (i) => {\n    ui.step = i;\n    saveUi();\n    const p = ps[i];\n    label.textContent = `Step ${i + 1} of ${ps.length}${p && view.layout.groups?.length ? ` \xB7 ${p.title}` : ''}`;\n    progress.firstChild.style.width = `${((i + 1) / ps.length) * 100}%`;\n    panel.replaceChildren(...(p ? p.qs.map((q) => cards.get(q.id).el) : []));\n    back.disabled = i === 0;\n    next.disabled = i === ps.length - 1;\n    next.textContent = i === ps.length - 1 ? 'Last step' : 'Next';\n    queueMermaid();\n    scrollTo({ top: 0, behavior: 'smooth' });\n  };\n  back.onclick = () => show(ui.step - 1);\n  next.onclick = () => show(ui.step + 1);\n  root.append(progress, el('div', { class: 'wizard-nav' }, label), panel, el('div', { class: 'wizard-nav' }, back, next));\n  show(ui.step);\n}\n\nfunction buildColumns(root) {\n  root.append(el('div', { class: 'columns', id: 'columns' }));\n  fillColumns();\n}\n\nfunction fillColumns() {\n  const wrap = $('columns');\n  if (!wrap) return;\n  const byStatus = view.layout.columnsBy === 'status' || !view.layout.groups?.length;\n  const cols = byStatus\n    ? [['open', 'Open'], ['skipped', 'Skipped'], ['answered', 'Answered'], ['withdrawn', 'Withdrawn']].map(([id, title]) => ({ id, title, qs: view.questions.filter((q) => statusOf(q) === id) }))\n    : groupsOf();\n  wrap.replaceChildren(...cols.filter((c) => c.qs.length || c.id === 'open').map((c) => {\n    const shown = c.qs.filter(visible);\n    return el('div', { class: 'column' },\n      el('h2', {}, el('span', { text: c.title }), el('span', { text: String(shown.length) })),\n      shown.map((q) => {\n        const status = statusOf(q);\n        return el('button', { type: 'button', class: 'mini', onclick: () => openModal(q.id) },\n          el('span', { class: 'mini-title', text: q.title }),\n          el('span', { class: 'card-meta' }, statusChip(q, status), isUnsent(q.id) ? el('span', { class: 'chip accent', text: 'unsent' }) : null),\n        );\n      }),\n    );\n  }));\n}\n\nfunction buildCustom(root) {\n  setRich(root, view.layout.html);\n  const placed = new Set();\n  for (const slot of root.querySelectorAll('[data-pl-question]')) {\n    const card = cards.get(slot.getAttribute('data-pl-question'));\n    if (card) {\n      slot.replaceChildren(card.el);\n      placed.add(slot.getAttribute('data-pl-question'));\n    }\n  }\n  const rest = view.questions.filter((q) => !placed.has(q.id));\n  if (rest.length) root.append(el('div', { class: 'section' }, el('h2', { text: 'More questions' }), rest.map((q) => cards.get(q.id).el)));\n  if (view.layout.script) {\n    try { new Function('punchList', view.layout.script)(api); } catch (err) { console.error('punch-list: layout script failed', err); toast('The custom layout script failed; see the console.'); }\n  }\n}\n\n// ---------- modal ----------\n\nfunction openModal(qid) {\n  closeModal();\n  const card = cards.get(qid);\n  if (!card) return;\n  modal = { qid, parent: card.el.parentNode, next: card.el.nextSibling };\n  $('modal-body').replaceChildren(card.el);\n  card.el.hidden = false;\n  $('modal').hidden = false;\n  queueMermaid();\n}\n\nfunction closeModal() {\n  if (!modal) return;\n  const card = cards.get(modal.qid);\n  if (card && modal.parent) modal.parent.insertBefore(card.el, modal.next);\n  else card?.el.remove();\n  modal = null;\n  $('modal').hidden = true;\n  if (view?.layout.type === 'columns') fillColumns();\n}\n\ndocument.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) closeModal(); });\ndocument.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });\n\n// ---------- bar, banners, counts ----------\n\nfunction refreshDerived() {\n  if (!view) return;\n  for (const q of view.questions) {\n    const card = cards.get(q.id);\n    if (card) refreshCardStatus(q, card);\n  }\n  const shown = view.questions.filter((q) => visible(q) && statusOf(q) !== 'withdrawn');\n  const count = (s) => shown.filter((q) => statusOf(q) === s).length;\n  const unsent = shown.filter((q) => isUnsent(q.id)).length;\n  $('counts').replaceChildren(...[\n    el('span', { text: `${count('answered')}/${shown.length} answered` }),\n    count('skipped') ? el('span', { text: `${count('skipped')} skipped` }) : null,\n    el('span', { text: unsent ? `${unsent} unsent` : 'all sent' }),\n  ].filter(Boolean));\n  const send = $('send');\n  send.textContent = unsent ? `Send to Claude (${unsent})` : 'Send to Claude';\n  send.disabled = unsent === 0;\n  $('done').textContent = view.done ? 'Done \u2713' : 'Done';\n  $('done').disabled = view.done;\n  for (const badge of document.querySelectorAll('[data-count]')) {\n    const p = pages().find((x) => x.id === badge.dataset.count);\n    const open = p ? p.qs.filter((q) => visible(q) && ['open', 'skipped'].includes(statusOf(q))).length : 0;\n    badge.textContent = open ? String(open) : '\u2713';\n  }\n  if (view.layout.type === 'columns' && !modal) fillColumns();\n}\n\nfunction refreshBanners() {\n  $('banner-listen').hidden = view.listening || view.done;\n  $('resume-prompt').textContent = view.resumePrompt;\n  $('banner-done').hidden = !view.done;\n  const dot = $('listen-dot');\n  dot.classList.toggle('on', view.listening);\n  dot.title = view.listening ? 'Claude is listening' : \"Claude isn't listening\";\n}\n\n$('copy-resume').addEventListener('click', async () => {\n  const text = $('resume-prompt').textContent;\n  try { await navigator.clipboard.writeText(text); toast('Copied. Paste it into your agent.'); }\n  catch { const r = document.createRange(); r.selectNodeContents($('resume-prompt')); getSelection().removeAllRanges(); getSelection().addRange(r); }\n});\n\n$('send').addEventListener('click', async () => {\n  await flushAll();\n  const { sent } = await post('send');\n  toast(sent ? 'Sent to Claude.' : 'Nothing new to send.');\n});\n\n$('done').addEventListener('click', async () => {\n  await flushAll();\n  const shown = view.questions.filter((q) => visible(q) && statusOf(q) !== 'withdrawn');\n  const open = shown.filter((q) => statusOf(q) === 'open').length;\n  const skipped = shown.filter((q) => statusOf(q) === 'skipped').length;\n  if (open + skipped === 0) return finish();\n  $('confirm-text').textContent = [open && `${open} not answered`, skipped && `${skipped} skipped`].filter(Boolean).join(', ') + '.';\n  $('actions').hidden = true;\n  $('confirm-done').hidden = false;\n});\n$('keep').addEventListener('click', () => { $('actions').hidden = false; $('confirm-done').hidden = true; });\n$('done-anyway').addEventListener('click', finish);\nasync function finish() {\n  $('actions').hidden = false;\n  $('confirm-done').hidden = true;\n  await flushAll();\n  await post('done');\n  toast('Marked done. Claude has your answers.');\n}\n$('reopen').addEventListener('click', () => post('reopen'));\n\n// ---------- custom-layout API ----------\n\nfunction emit(name, payload) {\n  for (const fn of listeners[name] || []) {\n    try { fn(payload); } catch (err) { console.error(err); }\n  }\n}\n\nconst api = {\n  answer: (qid, value) => setAnswer(qid, { value }),\n  note: (qid, note) => setAnswer(qid, { note }),\n  explain: (qid, text = '') => post('explain', { qid, text }),\n  skip: (qid, skipped = true) => post('skip', { qid, skipped }),\n  send: () => $('send').click(),\n  done: () => $('done').click(),\n  open: (qid) => openModal(qid),\n  state: () => ({ ...view, answers: Object.fromEntries(view.questions.map((q) => [q.id, answerOf(q.id)])) }),\n  on: (name, fn) => { (listeners[name] ||= []).push(fn); return () => { listeners[name] = listeners[name].filter((f) => f !== fn); }; },\n  renderQuestion: (qid, node) => { const c = cards.get(qid); if (c) node.replaceChildren(c.el); },\n};\nwindow.punchList = api;\n\n// ---------- live connection ----------\n\nfunction render(next) {\n  const firstRender = !view;\n  view = next;\n  document.title = `${view.title} \xB7 punch-list`;\n  $('title').textContent = view.title;\n  $('board-id').textContent = view.id;\n  if ($('intro').dataset.html !== (view.intro || '')) {\n    $('intro').dataset.html = view.intro || '';\n    setRich($('intro'), view.intro);\n  }\n  const lk = computeLayoutKey();\n  if (lk !== layoutKey) {\n    layoutKey = lk;\n    buildLayout();\n  } else {\n    for (const q of view.questions) updateCard(q);\n  }\n  for (const id of [...cards.keys()]) if (!view.questions.some((q) => q.id === id)) cards.delete(id);\n  refreshBanners();\n  refreshDerived();\n  emit('state', api.state());\n  if (firstRender) queueMermaid();\n}\n\nfunction connect() {\n  const es = new EventSource(`/b/${encodeURIComponent(boardId)}/stream?t=${encodeURIComponent(token)}`);\n  let lostTimer;\n  let lost = false;\n  es.addEventListener('state', (e) => {\n    clearTimeout(lostTimer);\n    $('banner-conn').hidden = true;\n    render(JSON.parse(e.data));\n    if (lost) {\n      lost = false;\n      // Back online: save anything that failed while the server was away.\n      flushAll().catch(() => {});\n    }\n  });\n  es.onerror = () => {\n    lost = true;\n    clearTimeout(lostTimer);\n    lostTimer = setTimeout(() => ($('banner-conn').hidden = false), 1500);\n  };\n}\n\nwindow.addEventListener('beforeunload', () => { for (const qid of Object.keys(saveTimers)) flushOne(qid); });\nconnect();\n";
+var app_default = `// punch-list Board page. Renders the Board the server streams over SSE inside an
+// editor-style frame (sidebar, main, explanation panel, status bar), keeps the person's
+// typing local until it is saved, and talks back with small POSTs.
+
+const token = new URLSearchParams(location.search).get('t') || '';
+const boardId = decodeURIComponent(location.pathname.split('/')[2] || '');
+const $ = (id) => document.getElementById(id);
+
+let view = null;
+/** Answers typed here but not yet confirmed saved by the server: qid -> {value, note}. */
+const local = {};
+const saveTimers = {};
+const inflight = new Set();
+const listeners = {};
+const ui = loadUi();
+ui.closed ||= [2, 3, 4];
+ui.seen ||= {};
+
+// ---------- status groups ----------
+
+const GROUP_NAME = ['Needs you', 'Claude is explaining', 'Answered', 'Skipped', 'Withdrawn'];
+const GROUP_CLASS = ['need', 'wait', 'ok', 'skip', 'skip'];
+/** Status is shown by shape as well as colour: ! needs you, \u2026 explaining, \u2713 answered, dashed \u2013 skipped, slashed withdrawn. */
+const GLYPH = [
+  '<svg class="g need" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M8 4.5v4.2M8 11.2v.3" stroke="var(--bg)" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  '<svg class="g wait" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="5" cy="8" r="1.1" fill="currentColor"/><circle cx="8" cy="8" r="1.1" fill="currentColor"/><circle cx="11" cy="8" r="1.1" fill="currentColor"/></svg>',
+  '<svg class="g ok" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.8 8.3l2.1 2.1 4.3-4.6" fill="none" stroke="var(--bg)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  '<svg class="g skip" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2.4 2"/><path d="M5.5 8h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  '<svg class="g skip" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4.5 11.5l7-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+];
+const CHEV = '<svg class="g chev" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
+
+function hasValue(a) {
+  if (!a) return false;
+  const v = a.value;
+  if (v === undefined || v === null) return false;
+  if (typeof v === 'string') return v.trim() !== '';
+  if (Array.isArray(v)) return v.length > 0;
+  return true;
+}
+const answerOf = (qid) => local[qid] ?? view?.drafts?.[qid];
+const qById = (qid) => view.questions.find((q) => q.id === qid);
+
+function groupOf(q) {
+  const s = q.state || {};
+  if (s.withdrawn) return 4;
+  if (s.explaining) return 1;
+  if (s.changed) return 0;
+  if (hasValue(answerOf(q.id))) return 2;
+  if (s.skipped) return 3;
+  return 0;
+}
+const isUnsent = (qid) => view.unsent.includes(qid) || qid in local;
+const isFresh = (q) => (q.state?.explanations?.length || 0) > (ui.seen[q.id] || 0);
+
+function visible(q) {
+  if (!q.showIf) return true;
+  return Object.entries(q.showIf).every(([dep, want]) => {
+    const got = answerOf(dep)?.value;
+    const wants = Array.isArray(want) ? want.map(String) : [String(want)];
+    if (Array.isArray(got)) return got.some((g) => wants.includes(String(g)));
+    return got !== undefined && got !== null && wants.includes(String(got));
+  });
+}
+
+/** Visible Questions, needs-you first, then explaining, answered, skipped, withdrawn; board order inside a group. */
+function sortedIds() {
+  return view.questions
+    .map((q, i) => [q, i])
+    .filter(([q]) => visible(q))
+    .sort(([a, ai], [b, bi]) => groupOf(a) - groupOf(b) || ai - bi)
+    .map(([q]) => q.id);
+}
+
+const stripTags = (s) => String(s).replace(/<[^>]+>/g, '');
+function answerText(q) {
+  const a = answerOf(q.id);
+  if (!hasValue(a)) return '';
+  const v = a.value;
+  if (q.type === 'yes-no') return v === 'yes' ? 'Yes' : v === 'no' ? 'No' : String(v);
+  const label = (x) => {
+    const o = (q.options || []).find((o) => o.value === x);
+    return o ? stripTags(o.label) : String(x);
+  };
+  if (Array.isArray(v)) return v.map(label).join(', ');
+  if (q.options) return label(v);
+  return typeof v === 'object' ? JSON.stringify(v) : String(v);
+}
+
+// ---------- helpers ----------
+
+function el(tag, attrs = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === undefined || v === null || v === false) continue;
+    if (k === 'class') n.className = v;
+    else if (k === 'text') n.textContent = v;
+    else if (k === 'html') n.innerHTML = v;
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+    else n.setAttribute(k, v === true ? '' : v);
+  }
+  for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false && kid !== '') n.append(kid);
+  return n;
+}
+
+function loadUi() {
+  try { return JSON.parse(localStorage.getItem(\`pl:\${boardId}:ui\`) || '{}'); } catch { return {}; }
+}
+function saveUi() {
+  try { localStorage.setItem(\`pl:\${boardId}:ui\`, JSON.stringify(ui)); } catch {}
+}
+
+/** Inserts agent HTML and runs any scripts in it (innerHTML alone never runs them). */
+function setRich(node, html) {
+  node.innerHTML = html || '';
+  for (const old of node.querySelectorAll('script')) {
+    const s = document.createElement('script');
+    for (const a of old.attributes) s.setAttribute(a.name, a.value);
+    s.textContent = old.textContent;
+    old.replaceWith(s);
+  }
+  queueMermaid();
+}
+const rich = (html, cls = 'rich') => { const n = el('div', { class: cls }); setRich(n, html); return n; };
+
+let mermaidQueued = false;
+let mermaidLib = null;
+function queueMermaid() {
+  if (mermaidQueued) return;
+  mermaidQueued = true;
+  requestAnimationFrame(async () => {
+    mermaidQueued = false;
+    const pending = document.querySelectorAll('.mermaid:not([data-processed])');
+    if (!pending.length) return;
+    try {
+      if (!mermaidLib) {
+        mermaidLib = (await import('https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs')).default;
+        const dark = !matchMedia('(prefers-color-scheme: light)').matches;
+        mermaidLib.initialize({ startOnLoad: false, theme: dark ? 'dark' : 'default' });
+      }
+      await mermaidLib.run({ nodes: [...pending] });
+    } catch (err) {
+      console.warn('punch-list: mermaid failed', err);
+    }
+  });
+}
+
+async function post(path, body = {}) {
+  let res;
+  try {
+    res = await fetch(\`/b/\${encodeURIComponent(boardId)}/\${path}\`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-sidekick-token': token },
+      body: JSON.stringify(body),
+      // Lets a draft save finish even when the page is being closed or reloaded.
+      keepalive: true,
+    });
+  } catch (err) {
+    toast("Can't reach the punch-list server. Your answers are kept here and saved when it's back.");
+    throw err;
+  }
+  if (!res.ok) {
+    const msg = (await res.json().catch(() => ({}))).error || res.statusText;
+    toast(\`Couldn't save: \${msg}\`);
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+let toastTimer;
+function toast(text) {
+  const t = $('toast');
+  t.textContent = text;
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (t.hidden = true), 2600);
+}
+function announce(text) {
+  const l = $('live');
+  l.textContent = '';
+  setTimeout(() => (l.textContent = text), 30);
+}
+
+const isFocus = () => view?.layout.type === 'focus';
+const wide = () => matchMedia('(min-width: 1400px)').matches;
+
+// ---------- answers ----------
+
+function setAnswer(qid, patch) {
+  const cur = answerOf(qid) || { value: null };
+  const next = { ...cur, ...patch };
+  if (!next.note) delete next.note;
+  local[qid] = next;
+  clearTimeout(saveTimers[qid]);
+  saveTimers[qid] = setTimeout(() => flushOne(qid), 400);
+  refresh();
+  emit('answer', { qid, answer: next });
+}
+
+async function flushOne(qid) {
+  clearTimeout(saveTimers[qid]);
+  delete saveTimers[qid];
+  const answer = local[qid];
+  if (!answer) return;
+  const p = post('draft', { qid, answer }).then(() => {
+    if (local[qid] === answer) delete local[qid];
+  });
+  inflight.add(p);
+  try { await p; } finally { inflight.delete(p); }
+}
+
+/** Saves every answer that isn't on the server yet, including ones whose save failed earlier. */
+async function flushAll() {
+  await Promise.all([...inflight].map((p) => p.catch(() => {})));
+  await Promise.all(Object.keys(local).map(flushOne));
+}
+
+// ---------- shared answer inputs ----------
+
+function choicesFor(q) {
+  if (q.type === 'yes-no') return [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }];
+  if (q.type === 'scale') {
+    const min = q.min ?? 1, max = q.max ?? 5, step = q.step ?? 1;
+    const out = [];
+    for (let v = min; v <= max + 1e-9; v += step) out.push({ value: v, label: String(v) });
+    return out;
+  }
+  return q.options || [];
+}
+
+/** Records a picked choice. Returns true for single-answer types, so the focus layout can move on. */
+function pick(q, value) {
+  if (q.type === 'multi') {
+    const set = new Set(Array.isArray(answerOf(q.id)?.value) ? answerOf(q.id).value : []);
+    set.has(value) ? set.delete(value) : set.add(value);
+    setAnswer(q.id, { value: (q.options || []).map((o) => o.value).filter((v) => set.has(v)) });
+    return false;
+  }
+  setAnswer(q.id, { value });
+  return true;
+}
+
+function renderInput(q, box, opts = {}) {
+  const { keys = false, onPicked } = opts;
+  box.replaceChildren();
+  if (q.state?.withdrawn) return;
+  const cur = answerOf(q.id)?.value;
+  switch (q.type) {
+    case 'yes-no':
+    case 'single':
+    case 'multi':
+    case 'scale': {
+      const multi = q.type === 'multi';
+      const chosen = new Set(multi ? (Array.isArray(cur) ? cur : []) : [cur]);
+      const list = el('div', { class: \`choices\${q.type === 'scale' ? ' row' : ''}\`, role: 'group', 'aria-label': q.title });
+      choicesFor(q).forEach((o, i) => {
+        const on = chosen.has(o.value);
+        const b = el('button', { type: 'button', class: \`choice\${on ? ' on' : ''}\`, 'aria-pressed': String(on) });
+        if (keys && i < 9) b.append(el('span', { class: 'key', text: String(i + 1) }));
+        else b.style.gridTemplateColumns = '1fr';
+        const body = el('span', { class: 'rich' });
+        const label = el('b');
+        setRich(label, o.label);
+        body.append(label);
+        if (o.recommended) body.append(el('span', { class: 'rec', text: 'recommended' }));
+        if (o.detail) { const d = el('small'); setRich(d, o.detail); body.append(d); }
+        b.append(body);
+        b.addEventListener('click', () => {
+          const single = pick(q, o.value);
+          if (multi) {
+            b.classList.toggle('on');
+            b.setAttribute('aria-pressed', String(b.classList.contains('on')));
+          } else {
+            for (const x of list.children) { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); }
+          }
+          if (single) onPicked?.();
+        });
+        list.append(b);
+      });
+      box.append(list);
+      break;
+    }
+    case 'text': {
+      const ta = el('textarea', { placeholder: 'Type your answer', 'aria-label': q.title, 'data-edit': 'answer' });
+      ta.value = typeof cur === 'string' ? cur : '';
+      ta.addEventListener('input', () => setAnswer(q.id, { value: ta.value }));
+      box.append(ta);
+      break;
+    }
+    case 'number': {
+      const inp = el('input', { type: 'number', min: q.min, max: q.max, step: q.step, 'aria-label': q.title, 'data-edit': 'answer' });
+      inp.value = cur ?? '';
+      inp.addEventListener('input', () => setAnswer(q.id, { value: inp.value === '' ? null : Number(inp.value) }));
+      box.append(inp);
+      break;
+    }
+    case 'rank':
+      box.append(rankList(q, cur, box, opts));
+      break;
+    case 'custom':
+      if (hasValue(answerOf(q.id))) box.append(el('div', { class: 'muted', text: \`Recorded: \${JSON.stringify(cur)}\` }));
+      break;
+  }
+}
+
+function rankList(q, cur, box, opts) {
+  const all = (q.options || []).map((o) => o.value);
+  const order = Array.isArray(cur) ? [...cur.filter((v) => all.includes(v)), ...all.filter((v) => !cur.includes(v))] : all;
+  const labelOf = (v) => stripTags(q.options.find((o) => o.value === v)?.label ?? v);
+  const move = (i, d) => {
+    const next = [...order];
+    [next[i], next[i + d]] = [next[i + d], next[i]];
+    setAnswer(q.id, { value: next });
+    renderInput(q, box, opts);
+  };
+  const list = el('ol', { class: 'rank' },
+    order.map((v, i) => el('li', {},
+      el('span', { text: labelOf(v) }),
+      el('button', { type: 'button', class: 'btn small ghost', text: '\u2191', 'aria-label': \`Move \${labelOf(v)} up\`, disabled: i === 0, onclick: () => move(i, -1) }),
+      el('button', { type: 'button', class: 'btn small ghost', text: '\u2193', 'aria-label': \`Move \${labelOf(v)} down\`, disabled: i === order.length - 1, onclick: () => move(i, 1) }),
+    )),
+  );
+  const wrap = el('div', { class: 'section' }, list);
+  if (!Array.isArray(cur)) wrap.append(el('button', { type: 'button', class: 'btn small ghost', text: 'This order is fine', onclick: () => { setAnswer(q.id, { value: order }); renderInput(q, box, opts); } }));
+  return wrap;
+}
+
+function noteField(q, { hint } = {}) {
+  const id = \`note-\${q.id}\`;
+  const ta = el('textarea', { id, class: 'note', placeholder: 'Optional', 'data-edit': 'note' });
+  ta.value = answerOf(q.id)?.note || '';
+  ta.addEventListener('input', () => setAnswer(q.id, { note: ta.value }));
+  const label = el('label', { for: id, html: \`Note for Claude\${hint ? ' <span style="color:var(--faint)">\xB7 <kbd>e</kbd> to type</span>' : ''}\` });
+  return el('div', { class: 'field' }, label, ta);
+}
+
+function threadNode(q) {
+  const th = el('div', { class: 'thread' });
+  for (const x of q.state?.explanations || []) {
+    const item = el('div', { class: 'expl' });
+    if (x.question) item.append(el('div', { class: 'asked', text: \`you asked: \${x.question}\` }));
+    item.append(rich(x.html));
+    th.append(item);
+  }
+  if (q.state?.explaining) th.append(el('div', { class: 'typing', text: \`Claude is explaining\${q.state.pendingQuestion ? \` \u201C\${q.state.pendingQuestion}\u201D\` : ''}\` }));
+  return th;
+}
+
+function askBox(q, { onAsked } = {}) {
+  const box = el('div', { class: 'ask', 'data-role': 'ask', hidden: true });
+  const ta = el('textarea', { placeholder: "What's unclear? Ask your own question, or leave empty for a simpler explanation.", 'aria-label': 'Your question to Claude' });
+  const submit = async () => {
+    await post('explain', { qid: q.id, text: ta.value });
+    box.hidden = true;
+    ta.value = '';
+    ta.blur();
+    toast(isFocus() ? 'Claude is on it. Moving to the next question meanwhile.' : 'Claude is on it.');
+    onAsked?.();
+  };
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); e.stopPropagation(); submit(); }
+  });
+  box.append(ta, el('div', { class: 'actions' },
+    el('button', { type: 'button', class: 'btn', html: 'Ask Claude <kbd>\u2318\u21B5</kbd>', onclick: submit }),
+    el('button', { type: 'button', class: 'btn ghost', html: 'Cancel <kbd>Esc</kbd>', onclick: () => (box.hidden = true) }),
+  ));
+  return box;
+}
+
+function changedNotice(q, after) {
+  const box = el('div', { class: 'notice attn' });
+  const said = answerText(q);
+  box.append(el('span', { text: \`Claude changed this question after you answered\${said ? \` (you said \${said})\` : ''}. Check your answer.\` }));
+  box.append(el('button', { type: 'button', class: 'btn small ghost', text: 'My answer still stands', onclick: async () => { await post('confirm', { qid: q.id }); after?.(); } }));
+  return box;
+}
+
+// ---------- chrome: sidebar, progress, status bar ----------
+
+function renderSidebar() {
+  const list = $('sideList');
+  const scroll = list.scrollTop;
+  list.replaceChildren();
+  const ids = sortedIds();
+  const current = isFocus() ? focus.current : null;
+  for (let g = 0; g < 5; g++) {
+    const inGroup = ids.filter((id) => groupOf(qById(id)) === g);
+    if (!inGroup.length) continue;
+    const closed = ui.closed.includes(g) && !inGroup.includes(current);
+    const sec = el('section', { class: \`sec\${closed ? ' closed' : ''}\` });
+    sec.append(el('button', {
+      type: 'button', class: 'sec-head', 'aria-expanded': String(!closed),
+      html: \`\${CHEV}\${GLYPH[g]}<span>\${GROUP_NAME[g]}</span><span class="n">\${inGroup.length}</span>\`,
+      onclick: () => { ui.closed = ui.closed.includes(g) ? ui.closed.filter((x) => x !== g) : [...ui.closed, g]; saveUi(); renderSidebar(); },
+    }));
+    const items = el('div', { class: 'items' });
+    for (const id of inGroup) {
+      const q = qById(id);
+      const cls = ['item', id === current && 'current', isFresh(q) && 'fresh', isUnsent(id) && g !== 4 && 'unsent', g === 4 && 'withdrawn'].filter(Boolean).join(' ');
+      const b = el('button', { type: 'button', class: cls, title: q.title, html: \`\${GLYPH[g]}<span class="t"></span><span class="a"></span>\` });
+      b.querySelector('.t').textContent = q.title;
+      b.querySelector('.a').textContent = answerText(q);
+      b.setAttribute('aria-label', \`\${q.title}, \${GROUP_NAME[g].toLowerCase()}\${answerText(q) ? \`, answer \${answerText(q)}\` : ''}\`);
+      if (id === current) b.setAttribute('aria-current', 'true');
+      b.addEventListener('click', () => reveal(id));
+      items.append(b);
+    }
+    sec.append(items);
+    list.append(sec);
+  }
+  list.scrollTop = scroll;
+}
+
+function renderProgress() {
+  const shown = view.questions.filter((q) => visible(q) && groupOf(q) !== 4);
+  const counts = [0, 0, 0, 0];
+  for (const q of shown) counts[groupOf(q)]++;
+  const segs = el('div', { class: 'segments' });
+  const labels = el('div', { class: 'labels' });
+  const jump = (g) => { const id = sortedIds().find((x) => groupOf(qById(x)) === g); if (id) reveal(id); };
+  counts.forEach((n, g) => {
+    if (n) {
+      const s = el('button', { type: 'button', class: \`segment \${GROUP_CLASS[g]}\`, title: \`\${GROUP_NAME[g]}: \${n}\`, 'aria-label': \`\${GROUP_NAME[g]}: \${n}\`, onclick: () => jump(g) });
+      s.style.flexGrow = n;
+      segs.append(s);
+    }
+    labels.append(el('button', { type: 'button', html: \`\${GLYPH[g]}<b>\${n}</b> \${GROUP_NAME[g].toLowerCase()}\`, onclick: () => jump(g) }));
+  });
+  $('progress').replaceChildren(segs, labels);
+  $('sbCounts').innerHTML = counts.map((n, g) => \`<span title="\${GROUP_NAME[g]}">\${GLYPH[g]}\${n}</span>\`).join('');
+  const unsent = shown.filter((q) => isUnsent(q.id)).length;
+  $('sbUnsent').textContent = unsent ? \`\${unsent} unsent\` : 'all sent';
+  $('send').disabled = unsent === 0;
+  $('done').textContent = view.done ? 'Done \u2713' : 'Done';
+  $('done').disabled = view.done;
+}
+
+function renderChrome() {
+  document.title = \`\${view.title} \xB7 punch-list\`;
+  $('title').textContent = view.title;
+  $('crumbBoard').textContent = view.id;
+  const cq = isFocus() && focus.current ? qById(focus.current) : null;
+  $('crumbQ').textContent = cq ? cq.title : '';
+  $('crumbSep').hidden = !cq;
+  if ($('intro').dataset.html !== (view.intro || '')) {
+    $('intro').dataset.html = view.intro || '';
+    setRich($('intro'), view.intro);
+  }
+  $('banner-listen').hidden = view.listening || view.done;
+  $('resume-prompt').textContent = view.resumePrompt;
+  $('banner-done').hidden = !view.done;
+  $('listen').classList.toggle('off', !view.listening);
+  $('listenText').textContent = view.listening ? 'listening' : 'not listening';
+  $('app').classList.toggle('no-insp', !isFocus());
+  $('mainIn').classList.toggle('wide', view.layout.type === 'columns' || view.layout.type === 'custom');
+  renderSidebar();
+  renderProgress();
+}
+
+/** Cheap update after a local change (an answer, a note): status, counts, sidebar. */
+function refresh() {
+  if (!view) return;
+  renderChrome();
+  if (isFocus()) renderFocusSoft();
+  else refreshCards();
+}
+
+// ---------- focus layout ----------
+
+const focus = { current: null, lastDir: 1, hardKey: null, pendingAdvance: null, deferred: false };
+
+function firstNeeding(after) {
+  const ids = sortedIds();
+  const start = after == null || !ids.includes(after) ? 0 : ids.indexOf(after) + 1;
+  return [...ids.slice(start), ...ids.slice(0, start)].find((id) => groupOf(qById(id)) === 0) || null;
+}
+
+function goTo(id, dir) {
+  const ids = sortedIds();
+  focus.lastDir = dir ?? (ids.indexOf(id) >= ids.indexOf(focus.current) ? 1 : -1);
+  focus.current = id;
+  focus.hardKey = null;
+  renderFocus();
+  renderChrome();
+  $('main').scrollTo({ top: 0 });
+  const q = id && qById(id);
+  if (q) announce(\`\${q.title}. \${GROUP_NAME[groupOf(q)]}. Question \${ids.indexOf(id) + 1} of \${ids.length}.\`);
+  else announce('Nothing needs you right now.');
+}
+
+function nextNeeding() {
+  clearTimeout(focus.pendingAdvance);
+  const next = firstNeeding(focus.current);
+  goTo(next && next !== focus.current ? next : null, 1);
+}
+
+/** Changes that need the question card rebuilt; answers typed here never do. */
+function focusHardKey(q) {
+  const { state, status, ...def } = q;
+  return JSON.stringify([q.id, def, state?.changed, state?.withdrawn, state?.explanations?.length, state?.explaining, state?.pendingQuestion, wide()]);
+}
+
+function renderFocus() {
+  const board = $('board');
+  if (focus.current && (!view.questions.some((q) => q.id === focus.current) || !visible(qById(focus.current)))) focus.current = firstNeeding(null);
+  const q = focus.current && qById(focus.current);
+  const key = q ? focusHardKey(q) : \`done:\${view.done}:\${JSON.stringify(view.questions.map((x) => [x.id, groupOf(x)]))}\`;
+  if (key === focus.hardKey) return renderFocusSoft();
+  // Never rebuild under the person's cursor; catch up when they leave the field.
+  const typing = document.activeElement?.matches?.('textarea, input') && ($('board').contains(document.activeElement) || $('inspBody').contains(document.activeElement));
+  if (typing && q && focus.hardKey && focus.hardKey.startsWith(\`["\${q.id}"\`)) {
+    focus.deferred = true;
+    return renderFocusSoft();
+  }
+  focus.deferred = false;
+  focus.hardKey = key;
+  board.replaceChildren();
+  if (!q) {
+    board.append(doneCard());
+  } else {
+    if (isFresh(q)) { ui.seen[q.id] = q.state.explanations.length; saveUi(); }
+    board.append(el('div', { 'data-slot': 'prev' }), focusCard(q), el('div', { 'data-slot': 'next' }));
+  }
+  board.append(el('div', { class: 'hint', html: '<span><kbd>1</kbd>\u2013<kbd>9</kbd> pick</span><span><kbd>e</kbd> edit text</span><span><kbd>\u21B5</kbd> next that needs me</span><span><kbd>\u2191</kbd><kbd>\u2193</kbd> move</span><span><kbd>s</kbd> skip</span><span><kbd>?</kbd> wait, what?</span><span><kbd>\u2318B</kbd> list</span><span><kbd>\u2318\u21B5</kbd> send</span>' }));
+  renderFocusSoft();
+  renderInspector();
+}
+document.addEventListener('focusout', () => setTimeout(() => { if (focus.deferred && isFocus()) renderFocus(); }, 0));
+
+/** Updates what can change while the person is typing: status line, colour, neighbours. */
+function renderFocusSoft() {
+  const q = focus.current && qById(focus.current);
+  const card = $('board').querySelector('.f-card[data-qid]');
+  if (!q || !card) return;
+  const g = groupOf(q);
+  card.classList.remove('need-c', 'wait-c', 'ok-c', 'skip-c');
+  card.classList.add(\`\${GROUP_CLASS[g]}-c\`);
+  const ids = sortedIds();
+  const inGroup = ids.filter((id) => groupOf(qById(id)) === g);
+  card.querySelector('[data-slot=status]').innerHTML = \`\${GLYPH[g]}\${GROUP_NAME[g]} \xB7 \${inGroup.indexOf(q.id) + 1} of \${inGroup.length}\`;
+  card.querySelector('[data-slot=pos]').textContent = \`\${ids.indexOf(q.id) + 1} / \${ids.length}\`;
+  const skip = card.querySelector('[data-act=skip]');
+  if (skip) skip.innerHTML = q.state?.skipped ? 'Unskip <kbd>s</kbd>' : 'Skip for now <kbd>s</kbd>';
+  const i = ids.indexOf(q.id);
+  $('board').querySelector('[data-slot=prev]')?.replaceChildren(peek(ids[i - 1], '\u2191 prev'));
+  $('board').querySelector('[data-slot=next]')?.replaceChildren(peek(ids[i + 1], '\u2193 next'));
+}
+
+function peek(id, where) {
+  if (!id) return el('div', { class: 'peek empty', 'aria-hidden': 'true' });
+  const q = qById(id);
+  const g = groupOf(q);
+  const b = el('button', { type: 'button', class: 'peek', html: \`\${GLYPH[g]}<span class="t"></span><span class="chip \${GROUP_CLASS[g]}"></span><span class="where">\${where}</span>\` });
+  b.querySelector('.t').textContent = q.title;
+  b.querySelector('.chip').textContent = g === 2 ? answerText(q) : GROUP_NAME[g].toLowerCase();
+  b.setAttribute('aria-label', \`\${where.replace(/[\u2191\u2193]\\s*/, '')}: \${q.title}, \${GROUP_NAME[g].toLowerCase()}\`);
+  b.addEventListener('click', () => goTo(id, where.includes('\u2191') ? -1 : 1));
+  return b;
+}
+
+function focusCard(q) {
+  const card = el('section', { class: 'f-card enter', 'data-qid': q.id, 'aria-labelledby': 'qtitle' });
+  card.style.setProperty('--from', \`\${focus.lastDir * 10}px\`);
+  card.append(el('div', { class: 'f-top' }, el('span', { 'data-slot': 'status' }), el('span', { 'data-slot': 'pos' })));
+  card.append(el('h2', { id: 'qtitle', text: q.title }));
+  if (q.state?.withdrawn) card.append(el('div', { class: 'notice muted-box', text: \`Withdrawn\${q.state.withdrawReason ? \`: \${q.state.withdrawReason}\` : ''}\` }));
+  else if (q.state?.changed) card.append(changedNotice(q, nextNeeding));
+  if (q.body) card.append(rich(q.body, 'rich body'));
+  if (q.state?.withdrawn) return card;
+
+  const input = el('div');
+  renderInput(q, input, {
+    keys: true,
+    onPicked: () => { clearTimeout(focus.pendingAdvance); focus.pendingAdvance = setTimeout(nextNeeding, 380); },
+  });
+  const editable = q.type === 'text' || q.type === 'number';
+  if (editable) card.append(el('div', { class: 'field' }, el('label', { html: 'Your answer <span style="color:var(--faint)">\xB7 <kbd>e</kbd> to type, <kbd>Esc</kbd> to leave</span>' }), input));
+  else card.append(input);
+  if (!editable && q.type !== 'custom') card.append(noteField(q, { hint: true }));
+  if (!wide()) {
+    if (q.state?.explanations?.length || q.state?.explaining) card.append(threadNode(q));
+    card.append(askBox(q, { onAsked: () => setTimeout(nextNeeding, 300) }));
+  }
+  card.append(el('div', { class: 'actions' },
+    el('button', { type: 'button', class: 'btn ghost', 'data-act': 'what', html: 'Wait, what? <kbd>?</kbd>', onclick: openAsk }),
+    el('button', { type: 'button', class: 'btn link', 'data-act': 'skip', onclick: skipCurrent }),
+    el('span', { class: 'spacer' }),
+    el('button', { type: 'button', class: 'btn', html: 'Next that needs me <kbd>\u21B5</kbd>', onclick: nextNeeding }),
+  ));
+  return card;
+}
+
+function doneCard() {
+  const shown = view.questions.filter(visible);
+  const skipped = shown.filter((q) => groupOf(q) === 3);
+  const explaining = shown.filter((q) => groupOf(q) === 1);
+  const card = el('section', { class: 'f-card done-card enter ok-c' });
+  card.innerHTML = '<svg class="big" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.8 8.3l2.1 2.1 4.3-4.6" fill="none" stroke="var(--bg)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  card.append(el('h2', { text: 'Nothing needs you right now' }));
+  card.append(el('p', { class: 'muted', style: 'margin:0', text: explaining.length ? \`Claude is still explaining \${explaining.length} question\${explaining.length > 1 ? 's' : ''}; it comes back to the top when the answer lands.\` : view.done ? 'The board is marked done.' : 'Send your answers, or mark the board done.' }));
+  if (skipped.length) {
+    const later = el('div', { class: 'later' }, el('div', { class: 'f-top' }, el('span', { text: 'You skipped' })));
+    for (const q of skipped) later.append(peek(q.id, 'go back'));
+    card.append(later);
+  }
+  card.append(el('div', { class: 'actions' },
+    el('button', { type: 'button', class: 'btn', html: 'Send to Claude <kbd>\u2318\u21B5</kbd>', onclick: sendAll }),
+    el('button', { type: 'button', class: 'btn ghost', text: 'Done', onclick: () => $('done').click() }),
+  ));
+  return card;
+}
+
+function renderInspector() {
+  const body = $('inspBody');
+  body.replaceChildren();
+  if (!isFocus() || !wide()) return;
+  const q = focus.current && qById(focus.current);
+  if (!q) return body.append(el('div', { class: 'empty-state', text: 'Explanations for the current question show up here.' }));
+  body.append(el('div', { class: 'insp-q' }, el('b', { text: q.title })));
+  if (q.state?.explanations?.length || q.state?.explaining) body.append(threadNode(q));
+  else body.append(el('div', { class: 'empty-state', html: 'Not sure what this question means? Press <kbd>?</kbd> and ask. Claude answers here while you carry on with the next question.' }));
+  if (!q.state?.withdrawn) body.append(askBox(q, { onAsked: () => setTimeout(nextNeeding, 300) }));
+}
+
+function openAsk() {
+  const scope = isFocus() && wide() ? $('inspBody') : $('board');
+  const box = scope.querySelector('[data-role=ask]');
+  if (!box) return;
+  box.hidden = false;
+  box.querySelector('textarea').focus();
+}
+
+async function skipCurrent() {
+  const q = focus.current && qById(focus.current);
+  if (!q) return;
+  const skipping = !q.state?.skipped;
+  await post('skip', { qid: q.id, skipped: skipping });
+  if (skipping) nextNeeding();
+}
+
+// ---------- card layouts (list, tabs, wizard, columns, custom) ----------
+
+const cards = new Map();
+let layoutKey = null;
+let modal = null;
+
+function defKey(q) {
+  const { state, status, ...def } = q;
+  return JSON.stringify([def, state?.changed, state?.withdrawn, state?.withdrawReason]);
+}
+const threadKey = (q) => JSON.stringify([q.state?.explanations, q.state?.explaining, q.state?.pendingQuestion]);
+
+function makeCard(q) {
+  const parts = {
+    head: el('div', { class: 'card-head' }),
+    body: el('div', { class: 'rich' }),
+    notice: el('div'),
+    input: el('div'),
+    note: el('div'),
+    thread: el('div'),
+    ask: el('div'),
+    actions: el('div', { class: 'card-actions' }),
+  };
+  const node = el('section', { class: 'card', 'data-qid': q.id }, Object.values(parts));
+  const card = { el: node, parts, keys: {} };
+  cards.set(q.id, card);
+  return card;
+}
+
+function updateCard(q) {
+  const card = cards.get(q.id) || makeCard(q);
+  const { parts, keys } = card;
+  const dk = defKey(q);
+  const focusedInside = card.el.contains(document.activeElement) && document.activeElement !== document.body;
+  if (keys.def !== dk) {
+    keys.def = dk;
+    renderHead(q, parts.head);
+    setRich(parts.body, q.body);
+    parts.body.hidden = !q.body;
+    parts.notice.replaceChildren();
+    if (q.state?.withdrawn) parts.notice.append(el('div', { class: 'notice muted-box', text: \`Withdrawn\${q.state.withdrawReason ? \`: \${q.state.withdrawReason}\` : ''}\` }));
+    else if (q.state?.changed) parts.notice.append(changedNotice(q));
+    renderInput(q, parts.input);
+    parts.note.replaceChildren();
+    if (!q.state?.withdrawn && q.type !== 'custom') parts.note.append(noteField(q));
+    renderActions(q, parts.actions, parts.ask);
+    keys.draft = JSON.stringify(view.drafts[q.id]);
+  } else {
+    const dkey = JSON.stringify(view.drafts[q.id]);
+    if (keys.draft !== dkey && !(q.id in local) && !focusedInside) {
+      renderInput(q, parts.input);
+      parts.note.replaceChildren();
+      if (!q.state?.withdrawn && q.type !== 'custom') parts.note.append(noteField(q));
+    }
+    keys.draft = dkey;
+  }
+  const tk = threadKey(q);
+  if (keys.thread !== tk) {
+    keys.thread = tk;
+    parts.thread.replaceChildren(threadNode(q));
+  }
+  refreshCardStatus(q, card);
+  return card;
+}
+
+function statusChip(q) {
+  const g = groupOf(q);
+  return el('span', { class: \`chip \${GROUP_CLASS[g]}\`, 'data-chip': 'status', text: q.state?.changed ? 'changed' : GROUP_NAME[g].toLowerCase() });
+}
+
+function refreshCardStatus(q, card) {
+  const g = groupOf(q);
+  card.el.classList.toggle('is-answered', g === 2);
+  card.el.classList.toggle('is-withdrawn', g === 4);
+  card.el.classList.toggle('is-changed', !!q.state?.changed);
+  card.el.classList.toggle('is-explaining', g === 1);
+  const meta = card.parts.head.querySelector('.card-meta');
+  if (meta) {
+    meta.querySelector('[data-chip=status]').replaceWith(statusChip(q));
+    meta.querySelector('[data-chip=unsent]').hidden = !isUnsent(q.id) || g === 4;
+  }
+  const skip = card.parts.actions.querySelector('[data-act=skip]');
+  if (skip) {
+    skip.textContent = q.state?.skipped ? 'Unskip' : 'Skip for now';
+    skip.hidden = g === 2 || g === 4;
+  }
+  card.el.hidden = !visible(q);
+}
+
+function renderHead(q, head) {
+  head.replaceChildren(
+    el('h3', { class: 'card-title', text: q.title }),
+    el('div', { class: 'card-meta' },
+      el('span', { 'data-chip': 'status' }),
+      el('span', { class: 'chip accent', 'data-chip': 'unsent', text: 'unsent', title: 'Not sent to Claude yet' }),
+      view.layout.type === 'columns' ? null : el('button', { type: 'button', class: 'btn small link', text: 'Expand', onclick: () => openModal(q.id) }),
+    ),
+  );
+}
+
+function renderActions(q, actions, ask) {
+  actions.replaceChildren();
+  ask.replaceChildren();
+  if (q.state?.withdrawn) return;
+  const box = askBox(q);
+  ask.append(box);
+  actions.append(
+    el('button', { type: 'button', class: 'btn small ghost', text: 'Wait, what? Explain better', onclick: () => { box.hidden = false; box.querySelector('textarea').focus(); } }),
+    el('button', { type: 'button', class: 'btn small link', 'data-act': 'skip', onclick: () => post('skip', { qid: q.id, skipped: !qById(q.id).state?.skipped }) }),
+  );
+}
+
+function groupsOf() {
+  const qs = view.questions;
+  const defined = view.layout.groups || [];
+  if (!defined.length) return null;
+  const ids = new Set(defined.map((g) => g.id));
+  const groups = defined.map((g) => ({ ...g, qs: qs.filter((q) => q.group === g.id) }));
+  const rest = qs.filter((q) => !ids.has(q.group));
+  if (rest.length) groups.push({ id: '_other', title: 'Other', qs: rest });
+  return groups.filter((g) => g.qs.length);
+}
+
+function pages() {
+  const groups = groupsOf();
+  if (groups) return groups;
+  return view.questions.map((q, i) => ({ id: q.id, title: \`\${i + 1}. \${q.title.length > 28 ? q.title.slice(0, 27) + '\u2026' : q.title}\`, qs: [q] }));
+}
+
+function buildLayout() {
+  closeModal();
+  const root = $('board');
+  root.replaceChildren();
+  const type = view.layout.type;
+  for (const q of view.questions) updateCard(q);
+  if (type === 'tabs') buildTabs(root);
+  else if (type === 'wizard') buildWizard(root);
+  else if (type === 'columns') buildColumns(root);
+  else if (type === 'custom') buildCustom(root);
+  else buildList(root);
+}
+
+function buildList(root) {
+  const groups = groupsOf();
+  if (!groups) return root.append(...view.questions.map((q) => cards.get(q.id).el));
+  for (const g of groups) root.append(el('div', { class: 'section' }, el('h2', { text: g.title }), g.qs.map((q) => cards.get(q.id).el)));
+}
+
+function buildTabs(root) {
+  const ps = pages();
+  if (!ps.length) return;
+  if (!ps.some((p) => p.id === ui.tab)) ui.tab = ps[0].id;
+  const bar = el('div', { class: 'tabs', role: 'tablist' });
+  const panel = el('div', { class: 'section' });
+  const show = (id) => {
+    ui.tab = id;
+    saveUi();
+    for (const b of bar.children) b.setAttribute('aria-selected', String(b.dataset.id === id));
+    panel.replaceChildren(...ps.find((p) => p.id === id).qs.map((q) => cards.get(q.id).el));
+    queueMermaid();
+  };
+  for (const p of ps) bar.append(el('button', { type: 'button', class: 'tab', role: 'tab', 'data-id': p.id, onclick: () => show(p.id) }, el('span', { text: p.title }), el('span', { class: 'count', 'data-count': p.id })));
+  root.append(bar, panel);
+  show(ui.tab);
+}
+
+function buildWizard(root) {
+  const ps = pages();
+  if (!ps.length) return;
+  ui.step = Math.min(Math.max(0, ui.step || 0), ps.length - 1);
+  const bar = el('div', { class: 'wizard-bar' }, el('div'));
+  const label = el('span', { class: 'muted' });
+  const panel = el('div', { class: 'section' });
+  const back = el('button', { type: 'button', class: 'btn ghost', text: 'Back' });
+  const next = el('button', { type: 'button', class: 'btn', text: 'Next' });
+  const show = (i) => {
+    ui.step = i;
+    saveUi();
+    const p = ps[i];
+    label.textContent = \`Step \${i + 1} of \${ps.length}\${view.layout.groups?.length ? \` \xB7 \${p.title}\` : ''}\`;
+    bar.firstChild.style.width = \`\${((i + 1) / ps.length) * 100}%\`;
+    panel.replaceChildren(...p.qs.map((q) => cards.get(q.id).el));
+    back.disabled = i === 0;
+    next.disabled = i === ps.length - 1;
+    next.textContent = i === ps.length - 1 ? 'Last step' : 'Next';
+    $('main').scrollTo({ top: 0, behavior: 'smooth' });
+    queueMermaid();
+  };
+  back.onclick = () => show(ui.step - 1);
+  next.onclick = () => show(ui.step + 1);
+  root.append(bar, el('div', { class: 'wizard-nav' }, label), panel, el('div', { class: 'wizard-nav' }, back, next));
+  show(ui.step);
+}
+
+function buildColumns(root) {
+  root.append(el('div', { class: 'columns', id: 'columns' }));
+  fillColumns();
+}
+
+function fillColumns() {
+  const wrap = $('columns');
+  if (!wrap) return;
+  const byStatus = view.layout.columnsBy === 'status' || !view.layout.groups?.length;
+  const cols = byStatus
+    ? [0, 1, 2, 3, 4].map((g) => ({ id: g, title: GROUP_NAME[g], qs: view.questions.filter((q) => groupOf(q) === g) }))
+    : groupsOf();
+  wrap.replaceChildren(...cols.filter((c) => c.qs.length || c.id === 0).map((c) => {
+    const shown = c.qs.filter(visible);
+    return el('div', { class: 'column' },
+      el('h2', {}, el('span', { text: c.title }), el('span', { text: String(shown.length) })),
+      shown.map((q) => el('button', { type: 'button', class: 'mini', onclick: () => openModal(q.id) },
+        el('span', { class: 'mini-title', text: q.title }),
+        el('span', { class: 'card-meta' }, statusChip(q), isUnsent(q.id) ? el('span', { class: 'chip accent', text: 'unsent' }) : null),
+      )),
+    );
+  }));
+}
+
+function buildCustom(root) {
+  setRich(root, view.layout.html);
+  const placed = new Set();
+  for (const slot of root.querySelectorAll('[data-pl-question]')) {
+    const card = cards.get(slot.getAttribute('data-pl-question'));
+    if (card) {
+      slot.replaceChildren(card.el);
+      placed.add(slot.getAttribute('data-pl-question'));
+    }
+  }
+  const rest = view.questions.filter((q) => !placed.has(q.id));
+  if (rest.length) root.append(el('div', { class: 'section' }, el('h2', { text: 'More questions' }), rest.map((q) => cards.get(q.id).el)));
+  if (view.layout.script) {
+    try { new Function('punchList', view.layout.script)(api); } catch (err) { console.error('punch-list: layout script failed', err); toast('The custom layout script failed; see the console.'); }
+  }
+}
+
+function refreshCards() {
+  for (const q of view.questions) {
+    const card = cards.get(q.id);
+    if (card) refreshCardStatus(q, card);
+  }
+  for (const badge of document.querySelectorAll('[data-count]')) {
+    const p = pages().find((x) => x.id === badge.dataset.count);
+    const open = p ? p.qs.filter((q) => visible(q) && [0, 3].includes(groupOf(q))).length : 0;
+    badge.textContent = open ? String(open) : '\u2713';
+  }
+  if (view.layout.type === 'columns' && !modal) fillColumns();
+}
+
+function openModal(qid) {
+  closeModal();
+  const card = cards.get(qid);
+  if (!card) return;
+  modal = { qid, parent: card.el.parentNode, next: card.el.nextSibling };
+  $('modal-body').replaceChildren(card.el);
+  card.el.hidden = false;
+  $('modal').hidden = false;
+  queueMermaid();
+}
+
+function closeModal() {
+  if (!modal) return;
+  const card = cards.get(modal.qid);
+  if (card && modal.parent) modal.parent.insertBefore(card.el, modal.next);
+  else card?.el.remove();
+  modal = null;
+  $('modal').hidden = true;
+  if (view?.layout.type === 'columns') fillColumns();
+}
+document.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) closeModal(); });
+
+/** Shows a Question wherever the current layout keeps it. */
+function reveal(qid) {
+  $('app').classList.remove('mobile-open');
+  if (isFocus()) return goTo(qid);
+  const type = view.layout.type;
+  if (type === 'columns') return openModal(qid);
+  if (type === 'tabs' || type === 'wizard') {
+    const ps = pages();
+    const i = ps.findIndex((p) => p.qs.some((q) => q.id === qid));
+    if (i === -1) return;
+    if (type === 'tabs') ui.tab = ps[i].id; else ui.step = i;
+    saveUi();
+    buildLayout();
+  }
+  const node = cards.get(qid)?.el;
+  if (node) {
+    node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    node.classList.add('flash');
+    setTimeout(() => node.classList.remove('flash'), 1200);
+  }
+}
+
+// ---------- status bar actions ----------
+
+$('copy-resume').addEventListener('click', async () => {
+  const text = $('resume-prompt').textContent;
+  try { await navigator.clipboard.writeText(text); toast('Copied. Paste it into your agent.'); }
+  catch { const r = document.createRange(); r.selectNodeContents($('resume-prompt')); getSelection().removeAllRanges(); getSelection().addRange(r); }
+});
+
+async function sendAll() {
+  await flushAll();
+  const { sent } = await post('send');
+  toast(sent ? 'Sent to Claude.' : 'Nothing new to send.');
+}
+$('send').addEventListener('click', sendAll);
+
+$('done').addEventListener('click', async () => {
+  await flushAll();
+  const shown = view.questions.filter((q) => visible(q) && groupOf(q) !== 4);
+  const open = shown.filter((q) => groupOf(q) === 0).length;
+  const skipped = shown.filter((q) => groupOf(q) === 3).length;
+  if (open + skipped === 0) return finish();
+  $('confirm-text').textContent = [open && \`\${open} not answered\`, skipped && \`\${skipped} skipped\`].filter(Boolean).join(', ') + '.';
+  $('actions').hidden = true;
+  $('confirm-done').hidden = false;
+});
+$('keep').addEventListener('click', () => { $('actions').hidden = false; $('confirm-done').hidden = true; });
+$('done-anyway').addEventListener('click', finish);
+async function finish() {
+  $('actions').hidden = false;
+  $('confirm-done').hidden = true;
+  await flushAll();
+  await post('done');
+  toast('Marked done. Claude has your answers.');
+}
+$('reopen').addEventListener('click', () => post('reopen'));
+
+// ---------- sidebar collapse (remembered per browser) ----------
+
+function setCollapsed(c) {
+  $('app').classList.toggle('collapsed', c);
+  $('toggleSide').setAttribute('aria-expanded', String(!c));
+  try { localStorage.setItem('pl-sidebar', c ? 'collapsed' : 'open'); } catch {}
+}
+function toggleSidebar() {
+  if (matchMedia('(max-width: 760px)').matches) return $('app').classList.toggle('mobile-open');
+  setCollapsed(!$('app').classList.contains('collapsed'));
+}
+$('toggleSide').addEventListener('click', toggleSidebar);
+{
+  let saved = null;
+  try { saved = localStorage.getItem('pl-sidebar'); } catch {}
+  setCollapsed(saved ? saved === 'collapsed' : innerWidth < 1100);
+}
+matchMedia('(min-width: 1400px)').addEventListener('change', () => { if (isFocus()) { focus.hardKey = null; renderFocus(); } });
+
+// ---------- keyboard ----------
+
+document.addEventListener('keydown', (e) => {
+  const typing = e.target.matches?.('textarea, input, select, [contenteditable]');
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendAll(); return; }
+  if ((e.key === 'b' || e.key === 'B') && (e.metaKey || e.ctrlKey)) { e.preventDefault(); toggleSidebar(); return; }
+  if (typing) {
+    if (e.key === 'Escape') {
+      const ask = e.target.closest('[data-role=ask]');
+      if (ask) ask.hidden = true;
+      e.target.blur();
+    }
+    return;
+  }
+  if (e.key === 'Escape') return closeModal();
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === 'l' || e.key === 'L') return toggleSidebar();
+  if (!view || !isFocus()) return;
+  const ids = sortedIds();
+  const i = ids.indexOf(focus.current);
+  if (e.key === 'Enter' && !e.target.closest?.('button, a')) { e.preventDefault(); return nextNeeding(); }
+  if (e.key === 'ArrowDown' || e.key === 'j') { e.preventDefault(); if (ids[i + 1]) goTo(ids[i + 1], 1); return; }
+  if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); if (i > 0) goTo(ids[i - 1], -1); return; }
+  const q = focus.current && qById(focus.current);
+  if (!q) return;
+  if (e.key === 'e') {
+    e.preventDefault();
+    const t = $('board').querySelector('[data-edit]');
+    if (t) { t.focus(); if (t.type !== 'number') t.setSelectionRange(t.value.length, t.value.length); }
+    return;
+  }
+  if (e.key === 's' || e.key === 'S') return skipCurrent();
+  if (e.key === '?') { e.preventDefault(); return openAsk(); }
+  if (/^[1-9]$/.test(e.key)) $('board').querySelectorAll('.f-card .choice')[Number(e.key) - 1]?.click();
+});
+
+// ---------- custom-layout API ----------
+
+function emit(name, payload) {
+  for (const fn of listeners[name] || []) {
+    try { fn(payload); } catch (err) { console.error(err); }
+  }
+}
+
+const api = {
+  answer: (qid, value) => setAnswer(qid, { value }),
+  note: (qid, note) => setAnswer(qid, { note }),
+  explain: (qid, text = '') => post('explain', { qid, text }),
+  skip: (qid, skipped = true) => post('skip', { qid, skipped }),
+  send: () => sendAll(),
+  done: () => $('done').click(),
+  open: (qid) => reveal(qid),
+  state: () => ({ ...view, answers: Object.fromEntries(view.questions.map((q) => [q.id, answerOf(q.id)])) }),
+  on: (name, fn) => { (listeners[name] ||= []).push(fn); return () => { listeners[name] = listeners[name].filter((f) => f !== fn); }; },
+  renderQuestion: (qid, node) => { const c = cards.get(qid); if (c) node.replaceChildren(c.el); },
+};
+window.punchList = api;
+
+// ---------- live connection ----------
+
+function render(next) {
+  const wasExplaining = view ? new Set(view.questions.filter((q) => q.state?.explaining).map((q) => q.id)) : new Set();
+  view = next;
+  if (isFocus()) {
+    if (layoutKey !== 'focus') { layoutKey = 'focus'; cards.clear(); focus.hardKey = null; }
+    if (!focus.current || !view.questions.some((q) => q.id === focus.current)) focus.current = firstNeeding(null);
+    renderFocus();
+    renderChrome();
+  } else {
+    const lk = JSON.stringify([view.layout, view.questions.map((q) => [q.id, q.group])]);
+    if (lk !== layoutKey) { layoutKey = lk; buildLayout(); }
+    else for (const q of view.questions) updateCard(q);
+    for (const id of [...cards.keys()]) if (!view.questions.some((q) => q.id === id)) cards.delete(id);
+    renderChrome();
+    refreshCards();
+  }
+  for (const q of view.questions) {
+    if (wasExplaining.has(q.id) && !q.state?.explaining) {
+      toast(\`New explanation on \u201C\${q.title}\u201D\`);
+      announce(\`Claude explained \u201C\${q.title}\u201D.\`);
+    }
+  }
+  emit('state', api.state());
+}
+
+function connect() {
+  const es = new EventSource(\`/b/\${encodeURIComponent(boardId)}/stream?t=\${encodeURIComponent(token)}\`);
+  let lostTimer;
+  let lost = false;
+  es.addEventListener('state', (e) => {
+    clearTimeout(lostTimer);
+    $('banner-conn').hidden = true;
+    render(JSON.parse(e.data));
+    if (lost) {
+      lost = false;
+      // Back online: save anything that failed while the server was away.
+      flushAll().catch(() => {});
+    }
+  });
+  es.onerror = () => {
+    lost = true;
+    clearTimeout(lostTimer);
+    lostTimer = setTimeout(() => ($('banner-conn').hidden = false), 1500);
+  };
+}
+
+window.addEventListener('beforeunload', () => { for (const qid of Object.keys(saveTimers)) flushOne(qid); });
+connect();
+`;
 
 // raw:/Users/valeriimaslenykov/Projects/personal/sidekick/src/punch-list/page/styles.css
-var styles_default = '/* Layout: one reading column of question cards, a sticky action bar at the bottom. */\n:root {\n  --bg: #f4f5f7;\n  --surface: #ffffff;\n  --sunk: #eef0f3;\n  --ink: #1b2130;\n  --muted: #5d6677;\n  --line: #d8dce3;\n  --accent: #2c56c9;\n  --accent-ink: #ffffff;\n  --accent-soft: #e6edfb;\n  --attn: #9a5b00;\n  --attn-soft: #fcf0d9;\n  --ok: #1d7a43;\n  --ok-soft: #e0f2e7;\n  --bad: #b3261e;\n  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;\n  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;\n  color-scheme: light;\n}\n@media (prefers-color-scheme: dark) {\n  :root {\n    --bg: #13161c;\n    --surface: #1b1f27;\n    --sunk: #151920;\n    --ink: #e6e9ef;\n    --muted: #9aa3b2;\n    --line: #2d333f;\n    --accent: #7ea2ff;\n    --accent-ink: #0d1424;\n    --accent-soft: #1f2a44;\n    --attn: #f2b55c;\n    --attn-soft: #3a2c15;\n    --ok: #6fd39a;\n    --ok-soft: #173326;\n    --bad: #ff8a80;\n    color-scheme: dark;\n  }\n}\n\n* { box-sizing: border-box; }\nhtml, body { margin: 0; }\nbody { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font); }\n[hidden] { display: none !important; }\na { color: var(--accent); }\ncode { font-family: var(--mono); font-size: 0.9em; background: var(--sunk); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }\npre { overflow-x: auto; background: var(--sunk); padding: 10px 12px; border-radius: 8px; font-size: 13px; }\npre code { background: none; padding: 0; }\nimg, svg, canvas, video { max-width: 100%; }\n\n.page { max-width: 820px; margin: 0 auto; padding: 28px 16px 140px; display: flex; flex-direction: column; gap: 16px; }\n.head { display: flex; flex-direction: column; gap: 4px; }\n.eyebrow { display: flex; gap: 10px; font-family: var(--mono); font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }\n.brand { color: var(--accent); font-weight: 600; }\nh1 { margin: 0; font-size: 26px; line-height: 1.2; text-wrap: balance; }\n.intro { color: var(--muted); max-width: 70ch; }\n.intro:empty { display: none; }\n.muted { color: var(--muted); }\n\n.banner { border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }\n.banner.warn { background: var(--attn-soft); color: var(--attn); }\n.banner.ok { background: var(--ok-soft); color: var(--ok); flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }\n.copyrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }\n.copyrow code { color: var(--ink); flex: 1 1 300px; padding: 6px 8px; }\n\n.board { display: flex; flex-direction: column; gap: 14px; }\n.section { display: flex; flex-direction: column; gap: 12px; }\n.section > h2 { margin: 8px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }\n\n/* Question card */\n.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }\n.card.is-answered { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }\n.card.is-changed { border-color: var(--attn); }\n.card.is-withdrawn { opacity: .55; }\n.card-head { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }\n.card-title { margin: 0; font-size: 17px; line-height: 1.35; text-wrap: balance; min-width: 0; }\n.card-meta { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }\n.chip { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 2px 8px; border-radius: 999px; background: var(--sunk); color: var(--muted); white-space: nowrap; }\n.chip.ok { background: var(--ok-soft); color: var(--ok); }\n.chip.attn { background: var(--attn-soft); color: var(--attn); }\n.chip.accent { background: var(--accent-soft); color: var(--accent); }\n.rich { min-width: 0; overflow-wrap: anywhere; }\n.rich > :first-child { margin-top: 0; }\n.rich > :last-child { margin-bottom: 0; }\n.rich table { border-collapse: collapse; display: block; overflow-x: auto; }\n.rich th, .rich td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; }\n.card-body { color: var(--ink); }\n.notice { border-radius: 8px; padding: 8px 10px; font-size: 14px; display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }\n.notice.attn { background: var(--attn-soft); color: var(--attn); }\n.notice.muted-box { background: var(--sunk); color: var(--muted); }\n\n/* Inputs */\n.opts { display: grid; gap: 8px; }\n.opt { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; cursor: pointer; background: var(--surface); }\n.opt:hover { border-color: var(--accent); }\n.opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }\n.opt input { margin: 3px 0 0; accent-color: var(--accent); }\n.opt-label { font-weight: 600; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }\n.opt-detail { color: var(--muted); font-size: 14px; display: block; margin-top: 2px; }\n.seg { display: flex; flex-wrap: wrap; gap: 8px; }\n.seg button { min-width: 64px; }\n.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }\ntextarea, input[type="number"] { width: 100%; font: inherit; color: var(--ink); background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }\ntextarea { min-height: 80px; resize: vertical; }\ninput[type="number"] { max-width: 200px; }\ntextarea:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\n.rank { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; counter-reset: rank; }\n.rank li { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }\n.rank li::before { counter-increment: rank; content: counter(rank); font-family: var(--mono); color: var(--muted); width: 1.5em; }\n.rank li span { flex: 1; min-width: 0; }\n.note-toggle { align-self: flex-start; }\n\n/* Explanations */\n.thread { display: flex; flex-direction: column; gap: 10px; border-left: 3px solid var(--accent); padding-left: 12px; }\n.thread:empty { display: none; }\n.expl-q { font-size: 13px; color: var(--muted); }\n.expl-q strong { color: var(--ink); font-weight: 600; }\n.explaining { color: var(--accent); font-size: 14px; display: flex; align-items: center; gap: 8px; }\n.dots::after { content: "\u2026"; animation: dots 1.2s steps(4, end) infinite; display: inline-block; width: 1.2em; overflow: hidden; vertical-align: bottom; }\n@keyframes dots { from { width: 0; } to { width: 1.2em; } }\n.ask { display: flex; flex-direction: column; gap: 8px; background: var(--sunk); border-radius: 10px; padding: 10px; }\n.ask textarea { min-height: 56px; background: var(--surface); }\n.card-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }\n\n/* Buttons */\n.btn { font: inherit; font-weight: 600; font-size: 14px; border-radius: 8px; padding: 8px 14px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); cursor: pointer; }\n.btn.ghost { background: transparent; color: var(--accent); border-color: var(--line); }\n.btn.ghost:hover { border-color: var(--accent); }\n.btn.small { padding: 4px 10px; font-size: 13px; }\n.btn.link { background: none; border: none; color: var(--accent); padding: 4px 2px; font-weight: 500; }\n.btn:disabled { opacity: .45; cursor: not-allowed; }\n\n/* Tabs */\n.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }\n.tab { font: inherit; font-weight: 600; font-size: 14px; background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 12px; color: var(--muted); cursor: pointer; white-space: nowrap; display: flex; gap: 6px; align-items: center; }\n.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }\n.tab .count { font-family: var(--mono); font-size: 11px; background: var(--sunk); padding: 0 6px; border-radius: 999px; }\n\n/* Wizard */\n.wizard-nav { display: flex; justify-content: space-between; align-items: center; gap: 10px; }\n.progress { height: 4px; background: var(--sunk); border-radius: 999px; overflow: hidden; }\n.progress > div { height: 100%; background: var(--accent); transition: width .2s; }\n\n/* Columns */\n.columns { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(230px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 6px; }\n.column { background: var(--sunk); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }\n.column > h2 { margin: 2px 4px 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); display: flex; justify-content: space-between; }\n.mini { background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 10px; text-align: left; font: inherit; color: var(--ink); cursor: pointer; display: flex; flex-direction: column; gap: 6px; }\n.mini:hover { border-color: var(--accent); }\n.mini-title { font-weight: 600; font-size: 14px; }\n.page:has(.columns) { max-width: 1200px; }\n\n/* Bar */\n.bar { position: fixed; left: 0; right: 0; bottom: 0; background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(8px); border-top: 1px solid var(--line); }\n.bar-in { max-width: 1200px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }\n.counts { font-family: var(--mono); font-size: 13px; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; }\n.actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }\n.listen-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }\n.listen-dot.on { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }\n\n/* Modal */\n.modal { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; z-index: 20; }\n.modal-back { position: absolute; inset: 0; background: rgb(0 0 0 / .45); }\n.modal-card { position: relative; width: min(760px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--bg); border-radius: 14px; padding: 44px 14px 14px; }\n.modal-x { position: absolute; top: 10px; right: 10px; }\n\n.toast { position: fixed; left: 50%; bottom: 78px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 14px; z-index: 30; }\n\n.index-list { display: flex; flex-direction: column; gap: 8px; }\n.index-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; text-decoration: none; color: var(--ink); }\n.index-row:hover { border-color: var(--accent); }\n.index-title { font-weight: 600; }\n.index-date { font-size: 13px; grid-column: 1 / -1; }\n\n@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }\n';
+var styles_default = '/* punch-list page. Editor-style workspace: title bar, question sidebar, main area,\n   explanation panel (focus layout, wide screens), status bar. Dark syntax palette with\n   blue focus; light variant follows the OS. */\n:root {\n  --bg: #0D1117; --panel: #11161E; --surface: #161B24; --raised: #1C2230; --line: #252C3A; --line-strong: #353D4E;\n  --ink: #E6EDF3; --muted: #8B96A8; --faint: #6B7587;\n  --focus: #58A6FF; --btn: #2F6FEB; --btn-ink: #FFFFFF; --sel: #1A2740;\n  --need: #E3B341; --need-soft: #2E2510; --wait: #BC8CFF; --wait-soft: #261C3B; --ok: #3FB950; --ok-soft: #12291A; --skip: #8B949E; --skip-soft: #1C2128;\n  --font: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;\n  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;\n  --ease: cubic-bezier(.2, .7, .2, 1);\n  --sidebar: 300px; --rail: 52px; --inspector: 380px;\n  color-scheme: dark;\n}\n@media (prefers-color-scheme: light) {\n  :root { --bg: #F6F8FA; --panel: #FFFFFF; --surface: #FFFFFF; --raised: #F3F4F6; --line: #D8DEE4; --line-strong: #C3CBD3;\n    --ink: #1F2328; --muted: #59636E; --faint: #6E7781; --focus: #0969DA; --btn: #0969DA; --btn-ink: #FFFFFF; --sel: #DDF4FF;\n    --need: #9A6700; --need-soft: #FFF8C5; --wait: #8250DF; --wait-soft: #FBEFFF; --ok: #1A7F37; --ok-soft: #DAFBE1; --skip: #6E7781; --skip-soft: #EAEEF2;\n    color-scheme: light; }\n}\n\n* { box-sizing: border-box; }\nhtml, body { margin: 0; }\nbody { background: var(--bg); color: var(--ink); font: 16px/1.55 var(--font); -webkit-font-smoothing: antialiased; }\nbody.shell { height: 100vh; overflow: hidden; }\n[hidden] { display: none !important; }\nbutton { font: inherit; color: inherit; }\na { color: var(--focus); }\ncode { font-family: var(--mono); font-size: .88em; background: var(--raised); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }\npre { overflow-x: auto; background: var(--raised); padding: 10px 12px; border-radius: 6px; font-size: 13px; }\npre code { background: none; padding: 0; }\nimg, svg, canvas, video { max-width: 100%; }\n:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }\n.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }\n.skip-link { position: absolute; left: 12px; top: -40px; background: var(--ink); color: var(--bg); padding: 6px 12px; border-radius: 6px; z-index: 30; }\n.skip-link:focus { top: 8px; }\n.muted { color: var(--muted); }\nsvg.g { width: 16px; height: 16px; flex: none; display: block; }\n.g.need { color: var(--need); } .g.wait { color: var(--wait); } .g.ok { color: var(--ok); } .g.skip { color: var(--skip); }\nkbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--muted); background: var(--surface); line-height: 1.5; }\n.rich { min-width: 0; overflow-wrap: anywhere; }\n.rich > :first-child { margin-top: 0; }\n.rich > :last-child { margin-bottom: 0; }\n.rich table { border-collapse: collapse; display: block; overflow-x: auto; font-size: 14px; }\n.rich th, .rich td { text-align: left; padding: 4px 12px 4px 0; border-bottom: 1px solid var(--line); }\n\n/* ---------- app grid ---------- */\n.app { height: 100vh; display: grid; grid-template-rows: 44px 1fr 30px; grid-template-columns: var(--sidebar) 1fr var(--inspector); grid-template-areas: "title title title" "side main insp" "status status status"; }\n.app.collapsed { grid-template-columns: var(--rail) 1fr var(--inspector); }\n.app.no-insp { grid-template-columns: var(--sidebar) 1fr; grid-template-areas: "title title" "side main" "status status"; }\n.app.no-insp.collapsed { grid-template-columns: var(--rail) 1fr; }\n.app.no-insp .inspector { display: none; }\n@media (max-width: 1399px) { .app { grid-template-columns: var(--sidebar) 1fr; grid-template-areas: "title title" "side main" "status status"; } .app.collapsed { grid-template-columns: var(--rail) 1fr; } .inspector { display: none; } }\n@media (max-width: 760px) {\n  .app, .app.collapsed, .app.no-insp, .app.no-insp.collapsed { grid-template-columns: 1fr; grid-template-areas: "title" "main" "status"; }\n  .sidebar { display: none; }\n  .app.mobile-open .sidebar { display: flex; position: fixed; inset: 44px 0 30px 0; z-index: 10; }\n  .proto, .statusbar .counts { display: none; }\n}\n\n/* ---------- title bar ---------- */\n.titlebar { grid-area: title; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-bottom: 1px solid var(--line); background: var(--panel); min-width: 0; }\n.icon-btn { width: 32px; height: 32px; border-radius: 6px; border: none; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; flex: none; }\n.icon-btn:hover { background: var(--raised); color: var(--ink); }\n.crumbs { font-family: var(--mono); font-size: 13px; color: var(--muted); display: flex; gap: 8px; align-items: center; min-width: 0; white-space: nowrap; overflow: hidden; }\n.crumbs b { color: var(--focus); font-weight: 600; }\n.crumbs .cur { color: var(--ink); overflow: hidden; text-overflow: ellipsis; }\n.crumbs .sep { color: var(--faint); }\n.proto { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--faint); white-space: nowrap; }\n\n/* ---------- sidebar ---------- */\n.sidebar { grid-area: side; background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }\n.side-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px 14px; font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }\n.side-scroll { overflow-y: auto; flex: 1; padding: 0 6px 12px; }\n.sec-head { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: none; background: none; cursor: pointer; font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border-radius: 4px; }\n.sec-head:hover { color: var(--ink); }\n.sec-head .chev { width: 10px; transition: transform .15s var(--ease); }\n.sec.closed .chev { transform: rotate(-90deg); }\n.sec.closed .items { display: none; }\n.sec-head .n { margin-left: auto; font-variant-numeric: tabular-nums; }\n.items { display: flex; flex-direction: column; gap: 1px; margin-bottom: 6px; }\n.item { display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; align-items: center; width: 100%; text-align: left; padding: 6px 8px 6px 10px; min-height: 32px; border: none; background: none; border-radius: 4px; cursor: pointer; font-size: 14px; color: var(--ink); position: relative; }\n.item:hover { background: var(--raised); }\n.item.current { background: var(--sel); }\n.item.current::before { content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; border-radius: 2px; background: var(--focus); }\n.item .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.item .a { font-family: var(--mono); font-size: 12px; color: var(--muted); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.item.unsent .a::after { content: " \u2022"; color: var(--focus); }\n.item.fresh .t::after { content: " new"; font-family: var(--mono); font-size: 10px; color: var(--need); text-transform: uppercase; letter-spacing: .06em; }\n.item.withdrawn .t { text-decoration: line-through; color: var(--muted); }\n.app.collapsed .side-head span, .app.collapsed .sec-head, .app.collapsed .item .t, .app.collapsed .item .a { display: none; }\n.app.collapsed .sec.closed .items { display: flex; }\n.app.collapsed .side-head { justify-content: center; padding: 10px 0 6px; }\n.app.collapsed .items { align-items: center; margin: 0; padding: 4px 0; border-bottom: 1px solid var(--line); }\n.app.collapsed .item { grid-template-columns: 16px; width: 36px; justify-content: center; padding: 10px; }\n.app.collapsed .item.fresh::after { content: ""; position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--need); }\n\n/* ---------- main ---------- */\n.main { grid-area: main; overflow-y: auto; min-width: 0; scroll-padding: 24px; }\n.main-in { max-width: 860px; margin: 0 auto; padding: 18px 28px 40px; display: flex; flex-direction: column; gap: 12px; }\n.main-in.wide { max-width: none; }\n.board-head { display: flex; flex-direction: column; gap: 2px; }\n.board-head h1 { margin: 0; font-size: 20px; line-height: 1.3; font-weight: 600; }\n.intro { color: var(--muted); max-width: 72ch; font-size: 15px; }\n.intro:empty { display: none; }\n\n.banner { border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; border: 1px solid; }\n.banner.warn { background: var(--need-soft); color: var(--need); border-color: color-mix(in srgb, var(--need) 35%, transparent); }\n.banner.ok { background: var(--ok-soft); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, transparent); flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }\n.copyrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }\n.copyrow code { color: var(--ink); flex: 1 1 300px; padding: 6px 8px; }\n\n.progress { display: flex; flex-direction: column; gap: 6px; }\n.segments { display: flex; gap: 3px; height: 6px; }\n.segment { border: none; padding: 0; border-radius: 2px; cursor: pointer; transition: flex-grow .3s var(--ease); min-width: 0; }\n.segment.need { background: var(--need); } .segment.wait { background: var(--wait); } .segment.ok { background: var(--ok); } .segment.skip { background: var(--skip); }\n.segment:hover { filter: brightness(1.2); }\n.labels { display: flex; gap: 4px 16px; flex-wrap: wrap; font-family: var(--mono); font-size: 12px; color: var(--muted); }\n.labels button { display: flex; gap: 6px; align-items: center; background: none; border: none; padding: 3px 0; cursor: pointer; }\n.labels button:hover { color: var(--ink); }\n.labels b { color: var(--ink); font-weight: 600; }\n\n.chip { font-family: var(--mono); font-size: 11px; padding: 1px 7px; border-radius: 4px; background: var(--raised); color: var(--muted); white-space: nowrap; max-width: 200px; overflow: hidden; text-overflow: ellipsis; text-transform: none; letter-spacing: 0; }\n.chip.need, .chip.attn { background: var(--need-soft); color: var(--need); } .chip.wait, .chip.accent { background: var(--wait-soft); color: var(--wait); } .chip.ok { background: var(--ok-soft); color: var(--ok); } .chip.skip { background: var(--skip-soft); color: var(--skip); }\n.rec { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--need); border: 1px solid currentColor; padding: 0 5px; border-radius: 3px; margin-left: 8px; vertical-align: 2px; }\n\n/* ---------- buttons ---------- */\n.btn { font-weight: 600; font-size: 14px; border-radius: 6px; padding: 7px 14px; min-height: 36px; border: 1px solid var(--btn); background: var(--btn); color: var(--btn-ink); cursor: pointer; display: inline-flex; gap: 8px; align-items: center; justify-content: center; transition: filter .12s var(--ease); }\n.btn:hover { filter: brightness(1.1); }\n.btn kbd { background: transparent; color: inherit; border-color: color-mix(in srgb, currentColor 40%, transparent); }\n.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line-strong); }\n.btn.ghost:hover { background: var(--raised); filter: none; }\n.btn.link { background: none; border-color: transparent; color: var(--muted); font-weight: 500; }\n.btn.link:hover { color: var(--ink); filter: none; }\n.btn.small { padding: 3px 10px; min-height: 28px; font-size: 13px; }\n.btn:disabled { opacity: .45; cursor: not-allowed; filter: none; }\n.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }\n.spacer { flex: 1; }\n\n/* ---------- inputs shared by every layout ---------- */\n.field { display: flex; flex-direction: column; gap: 6px; }\n.field label { font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }\ntextarea, input[type="number"] { width: 100%; font: inherit; font-size: 15px; color: var(--ink); background: var(--bg); border: 1px solid var(--line-strong); border-radius: 6px; padding: 9px 11px; }\ntextarea { min-height: 84px; resize: vertical; }\ntextarea.note { min-height: 44px; }\ninput[type="number"] { max-width: 200px; }\ntextarea:focus, input[type="number"]:focus { border-color: var(--focus); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 25%, transparent); }\n.choices { display: grid; gap: 6px; }\n.choice { display: grid; grid-template-columns: 24px 1fr; gap: 12px; align-items: start; padding: 11px 14px; min-height: 48px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); cursor: pointer; text-align: left; color: var(--ink); width: 100%; transition: border-color .12s var(--ease), background .12s var(--ease); }\n.choice:hover { border-color: var(--line-strong); background: var(--raised); }\n.choice.on { border-color: var(--focus); background: var(--sel); }\n.key { font-family: var(--mono); font-size: 12px; width: 22px; height: 22px; border-radius: 4px; border: 1px solid var(--line-strong); display: grid; place-items: center; color: var(--muted); }\n.choice.on .key { background: var(--focus); border-color: var(--focus); color: var(--bg); }\n.choice b { font-weight: 600; }\n.choice small { display: block; color: var(--muted); font-size: 14px; }\n.choices.row { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }\n.choices.row .choice { grid-template-columns: 1fr; justify-items: center; text-align: center; }\n.choices.row .choice .key { display: none; }\n.rank { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; counter-reset: rank; }\n.rank li { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }\n.rank li::before { counter-increment: rank; content: counter(rank); font-family: var(--mono); color: var(--muted); width: 1.5em; }\n.rank li span { flex: 1; min-width: 0; }\n\n.thread { display: flex; flex-direction: column; gap: 12px; }\n.thread:empty { display: none; }\n.expl { border-left: 2px solid var(--wait); padding: 2px 0 2px 12px; display: flex; flex-direction: column; gap: 6px; }\n.expl .asked { font-family: var(--mono); font-size: 12px; color: var(--muted); }\n.typing { color: var(--wait); font-family: var(--mono); font-size: 13px; }\n.typing::after { content: "\u2026"; animation: dots 1.2s steps(4, end) infinite; display: inline-block; width: 1.2em; overflow: hidden; vertical-align: bottom; }\n@keyframes dots { from { width: 0; } to { width: 1.2em; } }\n.ask { background: var(--raised); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }\n.ask textarea { min-height: 56px; }\n.notice { border-radius: 6px; padding: 8px 12px; font-size: 14px; display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }\n.notice.attn { background: var(--need-soft); color: var(--need); }\n.notice.muted-box { background: var(--raised); color: var(--muted); }\n\n/* ---------- focus layout ---------- */\n.peek { width: 100%; display: grid; grid-template-columns: 16px 1fr auto auto; gap: 10px; align-items: center; padding: 8px 12px; min-height: 40px; border: 1px dashed var(--line-strong); border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; text-align: left; font-size: 14px; transition: color .15s var(--ease), border-color .15s var(--ease); }\n.peek:hover { color: var(--ink); border-style: solid; }\n.peek .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.peek .where { font-family: var(--mono); font-size: 11px; color: var(--faint); }\n.peek.empty { visibility: hidden; }\n.f-card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 22px 24px; display: flex; flex-direction: column; gap: 16px; position: relative; }\n.f-card::before { content: ""; position: absolute; left: -1px; top: -1px; bottom: -1px; width: 3px; border-radius: 8px 0 0 8px; background: var(--c, var(--line)); }\n.f-card.need-c { --c: var(--need); } .f-card.wait-c { --c: var(--wait); } .f-card.ok-c { --c: var(--ok); } .f-card.skip-c { --c: var(--skip); }\n.f-card.enter { animation: enter .2s var(--ease); }\n@keyframes enter { from { opacity: 0; transform: translateY(var(--from, 10px)); } to { opacity: 1; transform: none; } }\n.f-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-family: var(--mono); font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }\n.f-top span { display: flex; gap: 8px; align-items: center; }\n.f-card h2 { margin: 0; font-size: 24px; line-height: 1.3; font-weight: 600; letter-spacing: -.01em; text-wrap: balance; }\n.done-card .big { width: 40px; height: 40px; color: var(--ok); }\n.later { width: 100%; display: flex; flex-direction: column; gap: 6px; }\n.hint { font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: center; padding-top: 4px; }\n\n/* ---------- other layouts: question cards ---------- */\n.board { display: flex; flex-direction: column; gap: 14px; }\n.section { display: flex; flex-direction: column; gap: 12px; }\n.section > h2 { margin: 8px 0 0; font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 500; }\n.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; position: relative; }\n.card.is-answered::before, .card.is-changed::before, .card.is-explaining::before { content: ""; position: absolute; left: -1px; top: -1px; bottom: -1px; width: 3px; border-radius: 8px 0 0 8px; background: var(--ok); }\n.card.is-changed::before { background: var(--need); }\n.card.is-explaining::before { background: var(--wait); }\n.card.is-withdrawn { opacity: .55; }\n.card.flash { box-shadow: 0 0 0 2px var(--focus); }\n.card-head { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }\n.card-title { margin: 0; font-size: 17px; line-height: 1.35; font-weight: 600; text-wrap: balance; min-width: 0; }\n.card-meta { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }\n.card-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }\n.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }\n.tab { font-weight: 600; font-size: 14px; background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 12px; color: var(--muted); cursor: pointer; white-space: nowrap; display: flex; gap: 6px; align-items: center; }\n.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--focus); }\n.tab .count { font-family: var(--mono); font-size: 11px; background: var(--raised); padding: 0 6px; border-radius: 999px; }\n.wizard-nav { display: flex; justify-content: space-between; align-items: center; gap: 10px; }\n.wizard-bar { height: 4px; background: var(--raised); border-radius: 999px; overflow: hidden; }\n.wizard-bar > div { height: 100%; background: var(--focus); transition: width .2s; }\n.columns { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(230px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 6px; }\n.column { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }\n.column > h2 { margin: 2px 4px 4px; font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); display: flex; justify-content: space-between; font-weight: 500; }\n.mini { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px; text-align: left; color: var(--ink); cursor: pointer; display: flex; flex-direction: column; gap: 6px; }\n.mini:hover { border-color: var(--line-strong); }\n.mini-title { font-weight: 600; font-size: 14px; }\n\n/* ---------- inspector ---------- */\n.inspector { grid-area: insp; background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }\n.insp-head { padding: 10px 16px 6px; font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; }\n.insp-body { overflow-y: auto; padding: 4px 16px 16px; display: flex; flex-direction: column; gap: 14px; }\n.empty-state { color: var(--muted); font-size: 14px; border: 1px dashed var(--line-strong); border-radius: 6px; padding: 14px; }\n.insp-q { font-size: 14px; color: var(--muted); }\n.insp-q b { color: var(--ink); font-weight: 600; }\n\n/* ---------- status bar ---------- */\n.statusbar { grid-area: status; display: flex; align-items: center; gap: 14px; padding: 0 8px 0 12px; background: var(--panel); border-top: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; }\n.statusbar .live { display: flex; gap: 6px; align-items: center; color: var(--ok); }\n.statusbar .live i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 22%, transparent); }\n.statusbar .live.off { color: var(--need); }\n.statusbar .counts { display: flex; gap: 12px; }\n.statusbar .counts span { display: flex; gap: 5px; align-items: center; }\n.statusbar .counts svg.g { width: 12px; height: 12px; }\n.statusbar .sb-btn { border: none; background: none; color: var(--muted); font: inherit; padding: 0 8px; height: 30px; cursor: pointer; display: flex; gap: 6px; align-items: center; }\n.statusbar .sb-btn:hover { background: var(--raised); color: var(--ink); }\n.statusbar .sb-btn.primary { background: var(--btn); color: var(--btn-ink); }\n.statusbar .sb-btn.primary:disabled { background: transparent; color: var(--faint); cursor: default; }\n.statusbar .confirm { display: flex; gap: 4px; align-items: center; color: var(--need); }\n\n/* ---------- modal, toast ---------- */\n.modal { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; z-index: 20; }\n.modal-back { position: absolute; inset: 0; background: rgb(0 0 0 / .55); }\n.modal-card { position: relative; width: min(760px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 44px 14px 14px; }\n.modal-x { position: absolute; top: 10px; right: 10px; }\n.toast { position: fixed; right: 16px; bottom: 42px; background: var(--raised); color: var(--ink); border: 1px solid var(--line-strong); padding: 8px 14px; border-radius: 6px; font-size: 14px; z-index: 30; box-shadow: 0 8px 24px rgb(0 0 0 / .25); }\n\n/* ---------- index page ---------- */\n.page { max-width: 820px; margin: 0 auto; padding: 28px 16px 60px; display: flex; flex-direction: column; gap: 16px; }\n.eyebrow { font-family: var(--mono); font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }\n.eyebrow .brand { color: var(--focus); font-weight: 600; }\n.page h1 { margin: 0; font-size: 24px; }\n.index-list { display: flex; flex-direction: column; gap: 6px; }\n.index-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; text-decoration: none; color: var(--ink); }\n.index-row:hover { border-color: var(--line-strong); }\n.index-title { font-weight: 600; }\n.index-date { font-size: 13px; grid-column: 1 / -1; color: var(--muted); font-family: var(--mono); }\n\n@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }\n.section > .btn { align-self: flex-start; }\n';
 
 // src/punch-list/server.ts
 var LISTENER_GRACE_MS = 1e4;

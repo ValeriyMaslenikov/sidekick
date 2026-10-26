@@ -46,7 +46,7 @@ export class BoardStore {
       id,
       title: input.title,
       intro: input.intro,
-      layout: input.layout ?? { type: 'list' },
+      layout: input.layout ?? { type: 'focus' },
       questions: input.questions,
       qstate: Object.fromEntries(input.questions.map((q) => [q.id, emptyState()])),
       drafts: {},

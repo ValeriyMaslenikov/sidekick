@@ -1,5 +1,5 @@
 export const QUESTION_TYPES = ['yes-no', 'single', 'multi', 'text', 'number', 'scale', 'rank', 'custom'] as const;
-export const LAYOUT_TYPES = ['list', 'tabs', 'wizard', 'columns', 'custom'] as const;
+export const LAYOUT_TYPES = ['focus', 'list', 'tabs', 'wizard', 'columns', 'custom'] as const;
 
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 export type LayoutType = (typeof LAYOUT_TYPES)[number];

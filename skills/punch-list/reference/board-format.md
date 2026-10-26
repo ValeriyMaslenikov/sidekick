@@ -46,13 +46,14 @@ Answer values sent back: `yes-no` → `"yes"`/`"no"`, `single` → option value,
 
 | `layout.type` | Shows |
 |---|---|
-| `list` (default) | All Questions in one column; sections per group when `groups` is set. |
+| `focus` (default) | One Question at a time. Questions that need the person come first, then ones you are explaining, answered, skipped. A sidebar lists every Question by status, previous/next Questions show above and below, and on wide screens your Explanations sit in a panel on the right. Keyboard: `1`–`9` pick, `↵` next that needs me, `↑`/`↓` move, `e` edit text, `s` skip, `?` ask you, `⌘B` sidebar. Best for most Boards. |
+| `list` | All Questions in one column; sections per group when `groups` is set. |
 | `tabs` | A tab per group (or per Question when no groups), with an open-count badge. |
 | `wizard` | One group (or Question) per step with Back/Next and progress. |
 | `columns` | Jira-like columns of compact tiles; click a tile to open the full Question. One column per group, or per status (`Open`, `Skipped`, `Answered`) when there are no groups or `"columnsBy": "status"`. |
 | `custom` | Your own `html`; each `<div data-pl-question="<id>"></div>` receives that Question's card. Unplaced Questions are listed below it. Optional `script` runs after mounting with `punchList` in scope. |
 
-Every Layout keeps the same page controls: the listening indicator, "Send to Claude", Done, and the "Expand" view of any Question.
+Every Layout keeps the same page frame: the question sidebar (grouped by status), a status bar with the listening indicator, "Send to Claude" and Done, and the progress bar. Card layouts also have an "Expand" view of any Question.
 
 ## `punchList` page API (custom layouts and `custom` Questions)
 
