@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>punch-list · focus view v3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: an editor-style workspace. Title bar on top; a persistent, collapsible question
+   sidebar on the left; the current question in the middle; an explanation panel on the
+   right on wide screens; a status bar at the bottom. */
+:root {
+  /* Dark syntax palette with blue focus (Developer Tool / IDE profile). */
+  --bg: #0D1117; --panel: #11161E; --surface: #161B24; --raised: #1C2230; --line: #252C3A; --line-strong: #353D4E;
+  --ink: #E6EDF3; --muted: #8B96A8; --faint: #6B7587;
+  --focus: #58A6FF; --btn: #2F6FEB; --btn-ink: #FFFFFF; --sel: #1A2740;
+  --need: #E3B341; --need-soft: #2E2510; --wait: #BC8CFF; --wait-soft: #261C3B; --ok: #3FB950; --ok-soft: #12291A; --skip: #8B949E; --skip-soft: #1C2128;
+  --font: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  --sidebar: 300px; --rail: 52px; --inspector: 380px;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #F6F8FA; --panel: #FFFFFF; --surface: #FFFFFF; --raised: #F3F4F6; --line: #D8DEE4; --line-strong: #C3CBD3;
+    --ink: #1F2328; --muted: #59636E; --faint: #6E7781; --focus: #0969DA; --btn: #0969DA; --btn-ink: #FFFFFF; --sel: #DDF4FF;
+    --need: #9A6700; --need-soft: #FFF8C5; --wait: #8250DF; --wait-soft: #FBEFFF; --ok: #1A7F37; --ok-soft: #DAFBE1; --skip: #6E7781; --skip-soft: #EAEEF2;
+    color-scheme: light; }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.55 var(--font); -webkit-font-smoothing: antialiased; overflow: hidden; }
+[hidden] { display: none !important; }
+button { font: inherit; color: inherit; }
+code { font-family: var(--mono); font-size: .88em; background: var(--raised); padding: 1px 5px; border-radius: 4px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.skip-link { position: absolute; left: 12px; top: -40px; background: var(--ink); color: var(--bg); padding: 6px 12px; border-radius: 6px; z-index: 30; }
+.skip-link:focus { top: 8px; }
+svg.g { width: 16px; height: 16px; flex: none; display: block; }
+.g.need { color: var(--need); } .g.wait { color: var(--wait); } .g.ok { color: var(--ok); } .g.skip { color: var(--skip); }
+kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--muted); background: var(--surface); line-height: 1.5; }
+
+/* ---------- app grid ---------- */
+.app { height: 100%; display: grid; grid-template-rows: 44px 1fr 30px; grid-template-columns: var(--sidebar) 1fr var(--inspector); grid-template-areas: "title title title" "side main insp" "status status status"; }
+.app.collapsed { grid-template-columns: var(--rail) 1fr var(--inspector); }
+@media (max-width: 1399px) { .app { grid-template-columns: var(--sidebar) 1fr; grid-template-areas: "title title" "side main" "status status"; } .app.collapsed { grid-template-columns: var(--rail) 1fr; } .inspector { display: none; } }
+@media (max-width: 760px) { .app, .app.collapsed { grid-template-columns: 1fr; grid-template-areas: "title" "main" "status"; } .sidebar { display: none; } .app.mobile-open .sidebar { display: flex; position: fixed; inset: 44px 0 30px 0; z-index: 10; } }
+
+/* ---------- title bar ---------- */
+.titlebar { grid-area: title; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-bottom: 1px solid var(--line); background: var(--panel); min-width: 0; }
+.icon-btn { width: 32px; height: 32px; border-radius: 6px; border: none; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; flex: none; }
+.icon-btn:hover { background: var(--raised); color: var(--ink); }
+.crumbs { font-family: var(--mono); font-size: 13px; color: var(--muted); display: flex; gap: 8px; align-items: center; min-width: 0; white-space: nowrap; overflow: hidden; }
+.crumbs b { color: var(--focus); font-weight: 600; }
+.crumbs .cur { color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
+.crumbs .sep { color: var(--faint); }
+.proto { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--faint); white-space: nowrap; }
+
+/* ---------- sidebar ---------- */
+.sidebar { grid-area: side; background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.side-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px 14px; font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.side-scroll { overflow-y: auto; flex: 1; padding: 0 6px 12px; }
+.sec-head { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: none; background: none; cursor: pointer; font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border-radius: 4px; }
+.sec-head:hover { color: var(--ink); }
+.sec-head .chev { width: 10px; transition: transform .15s var(--ease); }
+.sec.closed .chev { transform: rotate(-90deg); }
+.sec.closed .items { display: none; }
+.sec-head .n { margin-left: auto; font-variant-numeric: tabular-nums; }
+.items { display: flex; flex-direction: column; gap: 1px; margin-bottom: 6px; }
+.item { display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; align-items: center; width: 100%; text-align: left; padding: 6px 8px 6px 10px; min-height: 32px; border: none; background: none; border-radius: 4px; cursor: pointer; font-size: 14px; color: var(--ink); position: relative; }
+.item:hover { background: var(--raised); }
+.item.current { background: var(--sel); }
+.item.current::before { content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; border-radius: 2px; background: var(--focus); }
+.item .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item .a { font-family: var(--mono); font-size: 12px; color: var(--muted); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item.fresh .t::after { content: " new"; font-family: var(--mono); font-size: 10px; color: var(--need); text-transform: uppercase; letter-spacing: .06em; }
+/* collapsed: icon rail */
+.app.collapsed .side-head span, .app.collapsed .sec-head, .app.collapsed .item .t, .app.collapsed .item .a { display: none; }
+.app.collapsed .sec.closed .items { display: flex; }
+.app.collapsed .side-head { justify-content: center; padding: 10px 0 6px; }
+.app.collapsed .items { align-items: center; margin: 0; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.app.collapsed .item { grid-template-columns: 16px; width: 36px; justify-content: center; padding: 10px; }
+.app.collapsed .item.fresh::after { content: ""; position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--need); }
+
+/* ---------- main ---------- */
+.main { grid-area: main; overflow-y: auto; min-width: 0; scroll-padding: 24px; }
+.main-in { max-width: 860px; margin: 0 auto; padding: 18px 28px 40px; display: flex; flex-direction: column; gap: 12px; }
+.progress { display: flex; flex-direction: column; gap: 6px; }
+.segments { display: flex; gap: 3px; height: 6px; }
+.seg { border: none; padding: 0; border-radius: 2px; cursor: pointer; transition: flex-grow .3s var(--ease); min-width: 0; }
+.seg.need { background: var(--need); } .seg.wait { background: var(--wait); } .seg.ok { background: var(--ok); } .seg.skip { background: var(--skip); }
+.seg:hover { filter: brightness(1.2); }
+.labels { display: flex; gap: 4px 16px; flex-wrap: wrap; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.labels button { display: flex; gap: 6px; align-items: center; background: none; border: none; padding: 3px 0; cursor: pointer; }
+.labels button:hover { color: var(--ink); }
+.labels b { color: var(--ink); font-weight: 600; }
+
+.peek { display: grid; grid-template-columns: 16px 1fr auto auto; gap: 10px; align-items: center; padding: 8px 12px; min-height: 40px; border: 1px dashed var(--line-strong); border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; text-align: left; font-size: 14px; transition: color .15s var(--ease), border-color .15s var(--ease); }
+.peek:hover { color: var(--ink); border-style: solid; }
+.peek .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.peek .where { font-family: var(--mono); font-size: 11px; color: var(--faint); }
+.peek.empty { visibility: hidden; }
+.chip { font-family: var(--mono); font-size: 11px; padding: 1px 7px; border-radius: 4px; background: var(--raised); color: var(--muted); white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.chip.need { background: var(--need-soft); color: var(--need); } .chip.wait { background: var(--wait-soft); color: var(--wait); } .chip.ok { background: var(--ok-soft); color: var(--ok); } .chip.skip { background: var(--skip-soft); color: var(--skip); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 22px 24px; display: flex; flex-direction: column; gap: 16px; position: relative; }
+.card::before { content: ""; position: absolute; left: -1px; top: -1px; bottom: -1px; width: 3px; border-radius: 8px 0 0 8px; background: var(--c, var(--line)); }
+.card.need-c { --c: var(--need); } .card.wait-c { --c: var(--wait); } .card.ok-c { --c: var(--ok); } .card.skip-c { --c: var(--skip); }
+.card.enter { animation: enter .2s var(--ease); }
+@keyframes enter { from { opacity: 0; transform: translateY(var(--from, 10px)); } to { opacity: 1; transform: none; } }
+.card-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-family: var(--mono); font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.card-top span { display: flex; gap: 8px; align-items: center; }
+.card h2 { margin: 0; font-size: 24px; line-height: 1.3; font-weight: 600; letter-spacing: -.01em; text-wrap: balance; }
+.body p { margin: 0 0 6px; }
+.changed { background: var(--need-soft); color: var(--need); border-radius: 6px; padding: 8px 12px; font-size: 14px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+.opts { display: grid; gap: 6px; }
+.opt { display: grid; grid-template-columns: 24px 1fr; gap: 12px; align-items: start; padding: 11px 14px; min-height: 48px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); cursor: pointer; text-align: left; color: var(--ink); transition: border-color .12s var(--ease), background .12s var(--ease); }
+.opt:hover { border-color: var(--line-strong); background: var(--raised); }
+.opt.on { border-color: var(--focus); background: var(--sel); }
+.key { font-family: var(--mono); font-size: 12px; width: 22px; height: 22px; border-radius: 4px; border: 1px solid var(--line-strong); display: grid; place-items: center; color: var(--muted); }
+.opt.on .key { background: var(--focus); border-color: var(--focus); color: var(--bg); }
+.opt b { font-weight: 600; }
+.opt small { display: block; color: var(--muted); font-size: 14px; }
+.rec { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--need); border: 1px solid currentColor; padding: 0 5px; border-radius: 3px; margin-left: 8px; vertical-align: 2px; }
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+textarea { width: 100%; min-height: 84px; font: inherit; font-size: 15px; color: var(--ink); background: var(--bg); border: 1px solid var(--line-strong); border-radius: 6px; padding: 9px 11px; resize: vertical; }
+textarea.note { min-height: 44px; }
+textarea:focus { border-color: var(--focus); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 25%, transparent); }
+
+.thread { display: flex; flex-direction: column; gap: 12px; }
+.expl { border-left: 2px solid var(--wait); padding: 2px 0 2px 12px; display: flex; flex-direction: column; gap: 6px; }
+.expl .asked { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.expl table { border-collapse: collapse; font-size: 14px; }
+.expl th, .expl td { text-align: left; padding: 3px 12px 3px 0; border-bottom: 1px solid var(--line); }
+.typing { color: var(--wait); font-family: var(--mono); font-size: 13px; }
+.typing::after { content: "…"; animation: dots 1.2s steps(4, end) infinite; display: inline-block; width: 1.2em; overflow: hidden; vertical-align: bottom; }
+@keyframes dots { from { width: 0; } to { width: 1.2em; } }
+.ask { background: var(--raised); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.ask textarea { min-height: 56px; }
+
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.spacer { flex: 1; }
+.btn { font-weight: 600; font-size: 14px; border-radius: 6px; padding: 7px 14px; min-height: 36px; border: 1px solid var(--btn); background: var(--btn); color: var(--btn-ink); cursor: pointer; display: inline-flex; gap: 8px; align-items: center; transition: filter .12s var(--ease); }
+.btn:hover { filter: brightness(1.1); }
+.btn kbd { background: transparent; color: inherit; border-color: color-mix(in srgb, currentColor 40%, transparent); }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line-strong); }
+.btn.ghost:hover { background: var(--raised); filter: none; }
+.btn.link { background: none; border-color: transparent; color: var(--muted); font-weight: 500; }
+.btn.link:hover { color: var(--ink); filter: none; }
+.btn:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+
+.done-card { align-items: flex-start; }
+.done-card .big { width: 40px; height: 40px; color: var(--ok); }
+.later { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.hint { font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: center; padding-top: 4px; }
+
+/* ---------- inspector ---------- */
+.inspector { grid-area: insp; background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.insp-head { padding: 10px 16px 6px; font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; }
+.insp-body { overflow-y: auto; padding: 4px 16px 16px; display: flex; flex-direction: column; gap: 14px; }
+.empty-state { color: var(--muted); font-size: 14px; border: 1px dashed var(--line-strong); border-radius: 6px; padding: 14px; }
+.insp-q { font-size: 14px; color: var(--muted); }
+.insp-q b { color: var(--ink); font-weight: 600; }
+
+/* ---------- status bar ---------- */
+.statusbar { grid-area: status; display: flex; align-items: center; gap: 14px; padding: 0 8px 0 12px; background: var(--panel); border-top: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.statusbar .live { display: flex; gap: 6px; align-items: center; color: var(--ok); }
+.statusbar .live i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+.statusbar .counts { display: flex; gap: 12px; }
+.statusbar .counts span { display: flex; gap: 5px; align-items: center; }
+.statusbar .counts svg.g { width: 12px; height: 12px; }
+.statusbar .sb-btn { border: none; background: none; color: var(--muted); font: inherit; padding: 0 8px; height: 30px; cursor: pointer; display: flex; gap: 6px; align-items: center; }
+.statusbar .sb-btn:hover { background: var(--raised); color: var(--ink); }
+.statusbar .sb-btn.primary { background: var(--btn); color: var(--btn-ink); }
+.statusbar .sb-btn.primary:disabled { background: transparent; color: var(--faint); cursor: default; }
+
+.toast { position: fixed; right: 16px; bottom: 42px; background: var(--raised); color: var(--ink); border: 1px solid var(--line-strong); padding: 8px 14px; border-radius: 6px; font-size: 14px; z-index: 20; box-shadow: 0 8px 24px rgb(0 0 0 / .25); }
+
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to the current question</a>
+<div class="sr" role="status" aria-atomic="true" id="live"></div>
+<div class="app" id="app">
+  <header class="titlebar">
+    <button class="icon-btn" id="toggleSide" aria-controls="sidebar" aria-expanded="true" title="Toggle question list (⌘B or L)">
+      <svg class="g" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M6 2.5v11" stroke="currentColor" stroke-width="1.3"/></svg>
+      <span class="sr">Toggle question list</span>
+    </button>
+    <nav class="crumbs" aria-label="Breadcrumb"><b>punch-list</b><span class="sep">/</span><span>team-offsite</span><span class="sep">/</span><span id="crumbGroup"></span><span class="sep">/</span><span class="cur" id="crumbQ"></span></nav>
+    <span class="proto">prototype v3 · Claude is simulated</span>
+  </header>
+
+  <nav class="sidebar" id="sidebar" aria-label="Questions">
+    <div class="side-head"><span>Questions</span></div>
+    <div class="side-scroll" id="sideList"></div>
+  </nav>
+
+  <main class="main" id="main" tabindex="-1"><div class="main-in" id="stage"></div></main>
+
+  <aside class="inspector" id="inspector" aria-label="Explanation">
+    <div class="insp-head"><span>Explanation</span><span><kbd>?</kbd> ask</span></div>
+    <div class="insp-body" id="inspBody"></div>
+  </aside>
+
+  <footer class="statusbar">
+    <span class="live"><i></i>listening</span>
+    <span class="counts" id="sbCounts"></span>
+    <span class="spacer"></span>
+    <span id="sbUnsent"></span>
+    <button class="sb-btn primary" id="send">Send to Claude <kbd>⌘↵</kbd></button>
+    <button class="sb-btn" id="done">Done</button>
+  </footer>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const Q = [
+  { id: 'go', title: 'Should we run an offsite this quarter?', type: 'yes-no', body: '<p>Last one was in March. Budget is approved up to <code>€8k</code>.</p>', status: 'answered', answer: 'yes' },
+  { id: 'where', title: 'Where should it be?', type: 'single', body: '<p>Prices are for 12 people, 2 nights.</p>', options: [
+    { v: 'lisbon', l: 'Lisbon', d: '~€6.1k. Cheapest flights for most of the team.', rec: true },
+    { v: 'krakow', l: 'Kraków', d: '~€4.8k. Closest to the dev team; 2 people need visas.' },
+    { v: 'remote', l: 'Remote only', d: '~€900 for a shared online event.' } ], status: 'open' },
+  { id: 'days', title: 'How many working days?', type: 'single', options: [{ v: '1', l: '1 day' }, { v: '2', l: '2 days', rec: true }, { v: '3', l: '3 days' }], status: 'changed', answer: '3',
+    body: '<p>Travel days are not counted.</p>' },
+  { id: 'topics', title: 'Which topics must be covered?', type: 'multi', options: [
+    { v: 'roadmap', l: '2027 roadmap' }, { v: 'oncall', l: 'On-call rotation' }, { v: 'hiring', l: 'Hiring plan' }, { v: 'fun', l: 'Something fun' } ], status: 'open' },
+  { id: 'hotel', title: 'Hotel: city centre or beach?', type: 'single', options: [{ v: 'centre', l: 'City centre', rec: true }, { v: 'beach', l: 'Beach (Cascais)', d: '40 min by train.' }], status: 'answered', answer: 'centre' },
+  { id: 'energy', title: 'How tired is the team right now?', type: 'single', options: [1, 2, 3, 4, 5].map((n) => ({ v: String(n), l: String(n), d: n === 1 ? 'fresh' : n === 5 ? 'exhausted' : '' })), status: 'skipped' },
+  { id: 'food', title: 'Any dietary needs I should know about?', type: 'text', status: 'open' },
+  { id: 'budget', title: 'Can we go over budget by up to 10% for a better venue?', type: 'yes-no', status: 'explaining', asked: 'What venue options are we talking about?' },
+  { id: 'merch', title: 'Order team T-shirts?', type: 'yes-no', status: 'answered', answer: 'no' },
+];
+for (const q of Q) { q.explanations ||= []; q.unsent = false; q.note ||= ''; }
+
+const GROUP = { open: 0, changed: 0, explaining: 1, answered: 2, skipped: 3 };
+const GROUP_NAME = ['Needs you', 'Claude is explaining', 'Answered', 'Skipped'];
+const GROUP_CLASS = ['need', 'wait', 'ok', 'skip'];
+/** Status is shown by shape as well as colour: ! needs you, … explaining, ✓ answered, dashed – skipped. */
+const GLYPH = [
+  '<svg class="g need" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M8 4.5v4.2M8 11.2v.3" stroke="var(--bg)" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  '<svg class="g wait" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="5" cy="8" r="1.1" fill="currentColor"/><circle cx="8" cy="8" r="1.1" fill="currentColor"/><circle cx="11" cy="8" r="1.1" fill="currentColor"/></svg>',
+  '<svg class="g ok" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.8 8.3l2.1 2.1 4.3-4.6" fill="none" stroke="var(--bg)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  '<svg class="g skip" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2.4 2"/><path d="M5.5 8h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+];
+const CHEV = '<svg class="g chev" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
+
+let currentId = null;
+let order = [];
+let lastDir = 1;
+const closedSections = new Set([2, 3]);
+const $ = (id) => document.getElementById(id);
+const byId = (id) => Q.find((q) => q.id === id);
+const group = (q) => GROUP[q.status];
+const wide = () => matchMedia('(min-width: 1400px)').matches;
+const el = (tag, cls, html) => { const n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; };
+const announce = (t) => { const l = $('live'); l.textContent = ''; setTimeout(() => (l.textContent = t), 30); };
+let toastT;
+function toast(t) { const x = $('toast'); x.textContent = t; x.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (x.hidden = true), 2600); }
+
+/** Needs-you first, then explaining, answered, skipped; original order inside each group. */
+function resort() { order = [...Q].sort((a, b) => group(a) - group(b) || Q.indexOf(a) - Q.indexOf(b)).map((q) => q.id); }
+const idx = () => order.indexOf(currentId);
+function firstNeeding(after) {
+  const start = after == null ? 0 : order.indexOf(after) + 1;
+  return [...order.slice(start), ...order.slice(0, start)].find((id) => group(byId(id)) === 0) || null;
+}
+function go(id, dir) {
+  lastDir = dir ?? (order.indexOf(id) >= idx() ? 1 : -1);
+  currentId = id;
+  render();
+  const q = byId(id);
+  announce(`${q.title}. ${GROUP_NAME[group(q)]}. Question ${idx() + 1} of ${order.length}.`);
+}
+function nextNeeding() {
+  resort();
+  const next = firstNeeding(currentId);
+  if (next && next !== currentId) go(next, 1);
+  else { currentId = null; render(); announce('Nothing needs you right now.'); }
+}
+
+function hasValue(v) { return Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && v !== ''; }
+function setAnswer(q, value, { advance } = {}) {
+  q.answer = value;
+  q.status = hasValue(value) ? 'answered' : 'open';
+  q.unsent = true;
+  if (advance && hasValue(value)) { renderCurrentOnly(); setTimeout(nextNeeding, 380); } else renderChrome();
+}
+function pick(q, v) {
+  if (q.type === 'multi') {
+    const set = new Set(q.answer || []);
+    set.has(v) ? set.delete(v) : set.add(v);
+    setAnswer(q, q.options.map((o) => o.v).filter((x) => set.has(x)));
+    renderCurrentOnly();
+  } else setAnswer(q, v, { advance: true });
+}
+function askClaude(q, text) {
+  q.status = 'explaining';
+  q.asked = text;
+  toast('Claude is on it. Moving to the next question meanwhile.');
+  setTimeout(nextNeeding, 300);
+  setTimeout(() => {
+    q.explanations.push({ asked: text, html: simulated(q, text) });
+    q.status = hasValue(q.answer) ? 'answered' : 'open';
+    q.fresh = true;
+    resort();
+    render();
+    toast(`New explanation on “${q.title}”`);
+    announce(`Claude explained “${q.title}”. It is back in Needs you.`);
+  }, 3200);
+}
+function simulated(q, text) {
+  const opts = (q.options || [{ l: 'Yes' }, { l: 'No' }]).slice(0, 3);
+  return `<p><b>In short:</b> this decides ${q.title.toLowerCase().replace(/\?$/, '')}.${text ? ` About “${text}”:` : ''} here is what each answer leads to.</p>
+    <table><tr><th>If you pick</th><th>Then</th></tr>${opts.map((o) => `<tr><td>${o.l}</td><td style="color:var(--muted)">I plan around it and report the cost.</td></tr>`).join('')}</table>`;
+}
+function answerText(q) {
+  if (!hasValue(q.answer)) return '';
+  if (q.type === 'yes-no') return q.answer === 'yes' ? 'Yes' : 'No';
+  if (q.type === 'text') return q.answer;
+  const label = (v) => q.options.find((o) => o.v === v)?.l ?? v;
+  return Array.isArray(q.answer) ? q.answer.map(label).join(', ') : label(q.answer);
+}
+
+// ---------- sidebar ----------
+function renderSidebar() {
+  const list = $('sideList');
+  list.replaceChildren();
+  for (let g = 0; g < 4; g++) {
+    const ids = order.filter((id) => group(byId(id)) === g);
+    if (!ids.length) continue;
+    const sec = el('section', `sec${closedSections.has(g) && !ids.includes(currentId) ? ' closed' : ''}`);
+    const head = el('button', 'sec-head', `${CHEV}${GLYPH[g]}<span>${GROUP_NAME[g]}</span><span class="n">${ids.length}</span>`);
+    head.setAttribute('aria-expanded', String(!sec.classList.contains('closed')));
+    head.onclick = () => { closedSections.has(g) ? closedSections.delete(g) : closedSections.add(g); renderSidebar(); };
+    const items = el('div', 'items');
+    for (const id of ids) {
+      const q = byId(id);
+      const it = el('button', `item${id === currentId ? ' current' : ''}${q.fresh ? ' fresh' : ''}`, `${GLYPH[g]}<span class="t"></span><span class="a"></span>`);
+      it.querySelector('.t').textContent = q.title;
+      it.querySelector('.a').textContent = answerText(q);
+      it.title = q.title;
+      it.setAttribute('aria-label', `${q.title}, ${GROUP_NAME[g].toLowerCase()}${hasValue(q.answer) ? `, answer ${answerText(q)}` : ''}`);
+      if (id === currentId) it.setAttribute('aria-current', 'true');
+      it.onclick = () => go(id);
+      items.append(it);
+    }
+    sec.append(head, items);
+    list.append(sec);
+  }
+}
+
+// ---------- main stage ----------
+function progress() {
+  const counts = [0, 0, 0, 0];
+  for (const q of Q) counts[group(q)]++;
+  const wrap = el('div', 'progress');
+  const segs = el('div', 'segments');
+  const labels = el('div', 'labels');
+  counts.forEach((n, g) => {
+    const jump = () => { const id = order.find((x) => group(byId(x)) === g); if (id) go(id); };
+    if (n) { const s = el('button', `seg ${GROUP_CLASS[g]}`); s.style.flexGrow = n; s.title = `${GROUP_NAME[g]}: ${n}`; s.onclick = jump; segs.append(s); }
+    const b = el('button', null, `${GLYPH[g]}<b>${n}</b> ${GROUP_NAME[g].toLowerCase()}`);
+    b.onclick = jump;
+    labels.append(b);
+  });
+  wrap.append(segs, labels);
+  return wrap;
+}
+
+function peek(id, where) {
+  const b = el('button', 'peek');
+  if (!id) { b.classList.add('empty'); b.tabIndex = -1; return b; }
+  const q = byId(id);
+  const g = group(q);
+  b.innerHTML = `${GLYPH[g]}<span class="t"></span>${g === 2 ? `<span class="chip ok"></span>` : `<span class="chip ${GROUP_CLASS[g]}">${GROUP_NAME[g].toLowerCase()}</span>`}<span class="where">${where}</span>`;
+  b.querySelector('.t').textContent = q.title;
+  if (g === 2) b.querySelector('.chip').textContent = answerText(q);
+  b.setAttribute('aria-label', `${where.replace(/[↑↓]\s*/, '')}: ${q.title}, ${GROUP_NAME[g].toLowerCase()}`);
+  b.onclick = () => go(id, where.includes('↑') ? -1 : 1);
+  return b;
+}
+
+function threadNode(q) {
+  const th = el('div', 'thread');
+  for (const e of q.explanations) {
+    const it = el('div', 'expl');
+    if (e.asked) { const a = el('div', 'asked'); a.textContent = `you asked: ${e.asked}`; it.append(a); }
+    it.append(Object.assign(el('div'), { innerHTML: e.html }));
+    th.append(it);
+  }
+  if (q.status === 'explaining') { const t = el('div', 'typing'); t.textContent = `Claude is explaining${q.asked ? ` “${q.asked}”` : ''}`; th.append(t); }
+  return th;
+}
+
+function askBox(q) {
+  const ask = el('div', 'ask');
+  ask.hidden = true;
+  ask.dataset.role = 'ask';
+  const ta = el('textarea');
+  ta.placeholder = "What's unclear? Ask your own question, or leave empty for a simpler explanation.";
+  ta.setAttribute('aria-label', 'Your question to Claude');
+  const row = el('div', 'actions');
+  const send = el('button', 'btn', 'Ask Claude <kbd>⌘↵</kbd>');
+  send.onclick = () => askClaude(q, ta.value.trim());
+  ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); e.stopPropagation(); send.click(); } });
+  const cancel = el('button', 'btn ghost', 'Cancel <kbd>Esc</kbd>');
+  cancel.onclick = () => (ask.hidden = true);
+  row.append(send, cancel);
+  ask.append(ta, row);
+  return ask;
+}
+
+function questionCard(q) {
+  const g = group(q);
+  const card = el('section', `card enter ${GROUP_CLASS[g]}-c`);
+  card.style.setProperty('--from', `${lastDir * 10}px`);
+  card.setAttribute('aria-labelledby', 'qtitle');
+  const inGroup = order.filter((id) => group(byId(id)) === g);
+  card.innerHTML = `<div class="card-top"><span>${GLYPH[g]}${GROUP_NAME[g]} · ${inGroup.indexOf(q.id) + 1} of ${inGroup.length}</span><span>${idx() + 1} / ${order.length}</span></div><h2 id="qtitle"></h2>`;
+  card.querySelector('h2').textContent = q.title;
+
+  if (q.status === 'changed') {
+    const c = el('div', 'changed', `<span>Claude changed this question after you answered (you said <b></b>). Check it.</span>`);
+    c.querySelector('b').textContent = answerText(q);
+    const keep = el('button', 'btn ghost', 'My answer still stands');
+    keep.onclick = () => { q.status = 'answered'; q.unsent = true; nextNeeding(); };
+    c.append(keep);
+    card.append(c);
+  }
+  if (q.body) card.append(el('div', 'body', q.body));
+
+  if (q.type === 'text') {
+    const f = el('div', 'field');
+    const lab = el('label', null, `Your answer <span style="color:var(--faint)">press <kbd>e</kbd> to type, <kbd>Esc</kbd> to leave</span>`);
+    const ta = el('textarea');
+    ta.id = 'answer-text';
+    lab.htmlFor = ta.id;
+    ta.value = q.answer || '';
+    ta.oninput = () => setAnswer(q, ta.value);
+    ta.dataset.edit = 'answer';
+    f.append(lab, ta);
+    card.append(f);
+  } else {
+    const wrap = el('div', 'opts');
+    wrap.setAttribute('role', 'group');
+    wrap.setAttribute('aria-labelledby', 'qtitle');
+    const opts = q.type === 'yes-no' ? [{ v: 'yes', l: 'Yes' }, { v: 'no', l: 'No' }] : q.options;
+    const chosen = q.type === 'multi' ? new Set(q.answer || []) : new Set([q.answer]);
+    opts.forEach((o, i) => {
+      const b = el('button', `opt${chosen.has(o.v) ? ' on' : ''}`, `<span class="key">${i + 1}</span><span><b></b>${o.rec ? '<span class="rec">recommended</span>' : ''}${o.d ? '<small></small>' : ''}</span>`);
+      b.setAttribute('aria-pressed', String(chosen.has(o.v)));
+      b.querySelector('b').textContent = o.l;
+      if (o.d) b.querySelector('small').textContent = o.d;
+      b.onclick = () => pick(q, o.v);
+      wrap.append(b);
+    });
+    card.append(wrap);
+    const f = el('div', 'field');
+    const lab = el('label', null, `Note for Claude <span style="color:var(--faint)">optional · <kbd>e</kbd> to type</span>`);
+    const ta = el('textarea', 'note');
+    ta.id = 'answer-note';
+    lab.htmlFor = ta.id;
+    ta.value = q.note;
+    ta.oninput = () => { q.note = ta.value; q.unsent = true; renderChrome(); };
+    ta.dataset.edit = 'note';
+    f.append(lab, ta);
+    card.append(f);
+  }
+
+  // Explanations sit in the card on narrower screens and in the right panel on wide ones.
+  if (!wide()) {
+    if (q.explanations.length || q.status === 'explaining') card.append(threadNode(q));
+    card.append(askBox(q));
+  }
+
+  const actions = el('div', 'actions');
+  const what = el('button', 'btn ghost', 'Wait, what? <kbd>?</kbd>');
+  what.dataset.act = 'what';
+  what.onclick = openAsk;
+  const skip = el('button', 'btn link', q.status === 'skipped' ? 'Unskip <kbd>s</kbd>' : 'Skip for now <kbd>s</kbd>');
+  skip.onclick = skipCurrent;
+  const next = el('button', 'btn', 'Next that needs me <kbd>↵</kbd>');
+  next.onclick = nextNeeding;
+  actions.append(what, skip, el('span', 'spacer'), next);
+  card.append(actions);
+  return card;
+}
+
+function doneCard() {
+  const card = el('section', 'card done-card enter ok-c');
+  const skipped = Q.filter((q) => q.status === 'skipped');
+  const explaining = Q.filter((q) => q.status === 'explaining');
+  card.innerHTML = `<svg class="big" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.8 8.3l2.1 2.1 4.3-4.6" fill="none" stroke="var(--bg)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <h2>Nothing needs you right now</h2><p style="margin:0;color:var(--muted)">${explaining.length ? `Claude is still explaining ${explaining.length} question${explaining.length > 1 ? 's' : ''}; it comes back to the top when the answer lands.` : 'Send your answers, or mark the board done.'}</p>`;
+  if (skipped.length) {
+    const later = el('div', 'later', '<div class="card-top"><span>You skipped</span></div>');
+    for (const q of skipped) later.append(peek(q.id, 'go back'));
+    card.append(later);
+  }
+  const a = el('div', 'actions');
+  const s = el('button', 'btn', 'Send to Claude <kbd>⌘↵</kbd>');
+  s.onclick = sendAll;
+  const d = el('button', 'btn ghost', 'Done');
+  d.onclick = markDone;
+  a.append(s, d);
+  card.append(a);
+  return card;
+}
+
+function renderStage() {
+  const stage = $('stage');
+  stage.replaceChildren(progress());
+  if (!currentId) stage.append(doneCard());
+  else { const i = idx(); stage.append(peek(order[i - 1], '↑ prev'), questionCard(byId(currentId)), peek(order[i + 1], '↓ next')); }
+  stage.append(el('div', 'hint', '<span><kbd>1</kbd>–<kbd>9</kbd> pick</span><span><kbd>e</kbd> edit text</span><span><kbd>↵</kbd> next that needs me</span><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>s</kbd> skip</span><span><kbd>?</kbd> wait, what?</span><span><kbd>⌘B</kbd> list</span><span><kbd>⌘↵</kbd> send</span>'));
+}
+
+function renderInspector() {
+  const body = $('inspBody');
+  body.replaceChildren();
+  const q = currentId && byId(currentId);
+  if (!q) { body.append(el('div', 'empty-state', 'Explanations for the current question show up here.')); return; }
+  const head = el('div', 'insp-q', '<b></b>');
+  head.querySelector('b').textContent = q.title;
+  body.append(head);
+  if (q.explanations.length || q.status === 'explaining') body.append(threadNode(q));
+  else body.append(el('div', 'empty-state', 'Not sure what this question means? Press <kbd>?</kbd> and ask. Claude answers here while you carry on with the next question.'));
+  body.append(askBox(q));
+}
+
+function renderChrome() {
+  renderSidebar();
+  const q = currentId && byId(currentId);
+  $('crumbGroup').textContent = q ? GROUP_NAME[group(q)].toLowerCase() : 'all caught up';
+  $('crumbQ').textContent = q ? q.title : '';
+  const counts = [0, 0, 0, 0];
+  for (const x of Q) counts[group(x)]++;
+  $('sbCounts').innerHTML = counts.map((n, g) => `<span title="${GROUP_NAME[g]}">${GLYPH[g]}${n}</span>`).join('');
+  const n = Q.filter((x) => x.unsent).length;
+  $('sbUnsent').textContent = n ? `${n} unsent` : 'all sent';
+  $('send').disabled = !n;
+}
+function renderCurrentOnly() {
+  const card = document.querySelector('#stage .card');
+  if (!card || !currentId) return render();
+  const fresh = questionCard(byId(currentId));
+  fresh.classList.remove('enter');
+  card.replaceWith(fresh);
+  renderChrome();
+}
+function render() {
+  renderChrome();
+  renderStage();
+  if (wide()) renderInspector();
+  const q = currentId && byId(currentId);
+  if (q?.fresh) setTimeout(() => { q.fresh = false; }, 0);
+}
+
+function openAsk() {
+  const box = (wide() ? $('inspBody') : $('stage')).querySelector('[data-role=ask]');
+  if (!box) return;
+  box.hidden = false;
+  box.querySelector('textarea').focus();
+}
+function skipCurrent() {
+  const q = byId(currentId);
+  if (!q) return;
+  q.status = q.status === 'skipped' ? (hasValue(q.answer) ? 'answered' : 'open') : 'skipped';
+  nextNeeding();
+}
+function sendAll() {
+  const n = Q.filter((q) => q.unsent).length;
+  Q.forEach((q) => (q.unsent = false));
+  renderChrome();
+  toast(n ? `Sent ${n} answer${n === 1 ? '' : 's'} to Claude.` : 'Nothing new to send.');
+}
+function markDone() {
+  const open = Q.filter((q) => group(q) === 0).length;
+  Q.forEach((q) => (q.unsent = false));
+  renderChrome();
+  toast(open ? `Marked done with ${open} still open; Claude will use defaults or ask.` : 'Marked done. Claude has everything.');
+}
+$('send').onclick = sendAll;
+$('done').onclick = markDone;
+
+// ---------- sidebar collapse (remembered per browser) ----------
+function setCollapsed(c) {
+  $('app').classList.toggle('collapsed', c);
+  $('toggleSide').setAttribute('aria-expanded', String(!c));
+  try { localStorage.setItem('pl-sidebar', c ? 'collapsed' : 'open'); } catch {}
+}
+function toggleSidebar() {
+  if (matchMedia('(max-width: 760px)').matches) { $('app').classList.toggle('mobile-open'); return; }
+  setCollapsed(!$('app').classList.contains('collapsed'));
+}
+$('toggleSide').onclick = toggleSidebar;
+let saved = null;
+try { saved = localStorage.getItem('pl-sidebar'); } catch {}
+setCollapsed(saved ? saved === 'collapsed' : innerWidth < 1100);
+matchMedia('(min-width: 1400px)').addEventListener('change', render);
+
+// ---------- keyboard ----------
+document.addEventListener('keydown', (e) => {
+  const typing = e.target.matches?.('textarea, input');
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendAll(); return; }
+  if ((e.key === 'b' || e.key === 'B') && (e.metaKey || e.ctrlKey)) { e.preventDefault(); toggleSidebar(); return; }
+  if (typing) {
+    if (e.key === 'Escape') { e.target.blur(); const ask = e.target.closest('[data-role=ask]'); if (ask) ask.hidden = true; }
+    return;
+  }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const q = currentId && byId(currentId);
+  if (e.key === 'Enter') { e.preventDefault(); nextNeeding(); return; }
+  if (e.key === 'ArrowDown' || e.key === 'j') { e.preventDefault(); const n = order[idx() + 1]; if (n) go(n, 1); return; }
+  if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); const p = order[idx() - 1]; if (p) go(p, -1); return; }
+  if (e.key === 'l' || e.key === 'L') { toggleSidebar(); return; }
+  if (!q) return;
+  if (e.key === 'e') { e.preventDefault(); const t = document.querySelector('#stage [data-edit]'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } return; }
+  if (e.key === 's' || e.key === 'S') { skipCurrent(); return; }
+  if (e.key === '?') { e.preventDefault(); openAsk(); return; }
+  if (/^[1-9]$/.test(e.key) && q.type !== 'text') {
+    const opts = q.type === 'yes-no' ? ['yes', 'no'] : q.options.map((o) => o.v);
+    const v = opts[Number(e.key) - 1];
+    if (v) pick(q, v);
+  }
+});
+
+resort();
+currentId = firstNeeding(null);
+render();
+</script>
+</body>
+</html>
