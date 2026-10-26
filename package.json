@@ -1,0 +1,27 @@
+{
+  "name": "sidekick",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent skills that help a person in daily work with AI agents.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "install-skills": "node scripts/install-skills.mjs"
+  },
+  "dependencies": {
+    "@hono/node-server": "1.13.7",
+    "hono": "4.6.14"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "esbuild": "0.24.2",
+    "typescript": "5.7.2",
+    "vitest": "2.1.8"
+  }
+}
