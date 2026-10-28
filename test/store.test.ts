@@ -157,5 +157,22 @@ describe('BoardStore', () => {
     store.push('errors', { layout: { type: 'focus' } });
     expect(store.get('errors').layout.type).toBe('focus');
   });
+
+  it('counts a note with no option picked as the person\'s own answer', () => {
+    store.create('errors', input(), opts);
+    store.saveDraft('errors', 'flip', { value: null, note: 'Neither: scale it to zero' });
+    expect(questionStatus(store.get('errors'), 'flip')).toBe('answered');
+    expect(store.send('errors')?.data).toEqual({ answers: [
+      { qid: 'flip', title: 'What to do with flip?', value: null, ownAnswer: 'Neither: scale it to zero' },
+    ] });
+    store.done('errors');
+    expect(store.readEvents('errors').at(-1)?.data).toMatchObject({ answered: ['flip'] });
+  });
+
+  it('keeps a note as a note once an option is picked', () => {
+    store.create('errors', input(), opts);
+    store.saveDraft('errors', 'flip', { value: 'a', note: 'cheapest' });
+    expect(store.send('errors')?.data).toEqual({ answers: [{ qid: 'flip', title: 'What to do with flip?', value: 'a', note: 'cheapest' }] });
+  });
 });
 

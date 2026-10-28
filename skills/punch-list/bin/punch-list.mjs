@@ -2416,10 +2416,13 @@ function hasValue(a) {
   if (Array.isArray(v)) return v.length > 0;
   return true;
 }
+function isAnswered(a) {
+  return hasValue(a) || !!a?.note?.trim();
+}
 function questionStatus(board, qid) {
   const s = board.qstate[qid];
   if (s?.withdrawn) return "withdrawn";
-  if (hasValue(board.drafts[qid])) return "answered";
+  if (isAnswered(board.drafts[qid])) return "answered";
   if (s?.skipped) return "skipped";
   return "open";
 }
@@ -2578,7 +2581,7 @@ var BoardStore = class {
       board.qstate[q.id] = emptyState();
       return;
     }
-    const answered = hasValue(board.drafts[q.id]) || board.sent[q.id] !== void 0;
+    const answered = isAnswered(board.drafts[q.id]) || board.sent[q.id] !== void 0;
     if (answered && !same(board.questions[i], q)) board.qstate[q.id].changed = true;
     board.questions[i] = q;
   }
@@ -2604,7 +2607,7 @@ var BoardStore = class {
     const s = this.state(board, qid);
     this.reopenForPerson(board);
     board.drafts[qid] = answer.note ? { value: answer.value, note: answer.note } : { value: answer.value };
-    if (hasValue(board.drafts[qid])) s.skipped = false;
+    if (isAnswered(board.drafts[qid])) s.skipped = false;
     return this.commit(board);
   }
   skip(id, qid, skipped) {
@@ -2647,7 +2650,9 @@ var BoardStore = class {
       const d = board.drafts[qid] ?? { value: null };
       board.sent[qid] = d;
       board.qstate[qid].changed = false;
-      return { qid, title: this.question(board, qid).title, value: d.value, ...d.note ? { note: d.note } : {} };
+      const title = this.question(board, qid).title;
+      if (!hasValue(d) && d.note?.trim()) return { qid, title, value: null, ownAnswer: d.note };
+      return { qid, title, value: d.value, ...d.note ? { note: d.note } : {} };
     });
     board.forceSend = [];
     const event = this.event(board, "answers", { answers });
@@ -2926,6 +2931,9 @@ function hasValue(a) {
   return true;
 }
 const answerOf = (qid) => local[qid] ?? view?.drafts?.[qid];
+/** A note typed with no option picked is the person's own answer. */
+const isOwnAnswer = (a) => !hasValue(a) && !!a?.note?.trim();
+const isAnswered = (a) => hasValue(a) || isOwnAnswer(a);
 const qById = (qid) => view.questions.find((q) => q.id === qid);
 
 function groupOf(q) {
@@ -2933,7 +2941,7 @@ function groupOf(q) {
   if (s.withdrawn) return 4;
   if (s.explaining) return 1;
   if (s.changed) return 0;
-  if (hasValue(answerOf(q.id))) return 2;
+  if (isAnswered(answerOf(q.id))) return 2;
   if (s.skipped) return 3;
   return 0;
 }
@@ -2962,6 +2970,7 @@ function sortedIds() {
 const stripTags = (s) => String(s).replace(/<[^>]+>/g, '');
 function answerText(q) {
   const a = answerOf(q.id);
+  if (isOwnAnswer(a)) return 'own answer';
   if (!hasValue(a)) return '';
   const v = a.value;
   if (q.type === 'yes-no') return v === 'yes' ? 'Yes' : v === 'no' ? 'No' : String(v);

@@ -40,6 +40,8 @@
 | `optional` | no | Informational flag shown to the person. |
 | `group` | no | A `layout.groups` id: the tab, wizard step or column it belongs to. |
 
+A note typed on a choice question with no option picked is the person's own answer: it counts as answered and arrives as `{ "value": null, "ownAnswer": "…" }`. Treat it as the decision, not a remark.
+
 Answer values sent back: `yes-no` → `"yes"`/`"no"`, `single` → option value, `multi` → array of values, `text` → string, `number`/`scale` → number, `rank` → array of values in order, `custom` → whatever the page code passed to `punchList.answer`.
 
 ## Layouts

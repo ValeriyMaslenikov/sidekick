@@ -39,6 +39,9 @@ function hasValue(a) {
   return true;
 }
 const answerOf = (qid) => local[qid] ?? view?.drafts?.[qid];
+/** A note typed with no option picked is the person's own answer. */
+const isOwnAnswer = (a) => !hasValue(a) && !!a?.note?.trim();
+const isAnswered = (a) => hasValue(a) || isOwnAnswer(a);
 const qById = (qid) => view.questions.find((q) => q.id === qid);
 
 function groupOf(q) {
@@ -46,7 +49,7 @@ function groupOf(q) {
   if (s.withdrawn) return 4;
   if (s.explaining) return 1;
   if (s.changed) return 0;
-  if (hasValue(answerOf(q.id))) return 2;
+  if (isAnswered(answerOf(q.id))) return 2;
   if (s.skipped) return 3;
   return 0;
 }
@@ -75,6 +78,7 @@ function sortedIds() {
 const stripTags = (s) => String(s).replace(/<[^>]+>/g, '');
 function answerText(q) {
   const a = answerOf(q.id);
+  if (isOwnAnswer(a)) return 'own answer';
   if (!hasValue(a)) return '';
   const v = a.value;
   if (q.type === 'yes-no') return v === 'yes' ? 'Yes' : v === 'no' ? 'No' : String(v);

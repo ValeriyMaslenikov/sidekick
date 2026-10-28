@@ -119,10 +119,15 @@ export function hasValue(a: AnswerValue | undefined): boolean {
   return true;
 }
 
+/** An Answer counts once it has a value, or a note with no value (the person's own answer). */
+export function isAnswered(a: AnswerValue | undefined): boolean {
+  return hasValue(a) || !!a?.note?.trim();
+}
+
 export function questionStatus(board: Board, qid: string): QuestionStatus {
   const s = board.qstate[qid];
   if (s?.withdrawn) return 'withdrawn';
-  if (hasValue(board.drafts[qid])) return 'answered';
+  if (isAnswered(board.drafts[qid])) return 'answered';
   if (s?.skipped) return 'skipped';
   return 'open';
 }

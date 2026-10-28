@@ -4,6 +4,7 @@ import { paths } from './paths.js';
 import {
   BOARD_ID,
   hasValue,
+  isAnswered,
   questionStatus,
   validateBoardInput,
   validatePatch,
@@ -114,7 +115,7 @@ export class BoardStore {
       board.qstate[q.id] = emptyState();
       return;
     }
-    const answered = hasValue(board.drafts[q.id]) || board.sent[q.id] !== undefined;
+    const answered = isAnswered(board.drafts[q.id]) || board.sent[q.id] !== undefined;
     if (answered && !same(board.questions[i], q)) board.qstate[q.id].changed = true;
     board.questions[i] = q;
   }
@@ -143,7 +144,7 @@ export class BoardStore {
     const s = this.state(board, qid);
     this.reopenForPerson(board);
     board.drafts[qid] = answer.note ? { value: answer.value, note: answer.note } : { value: answer.value };
-    if (hasValue(board.drafts[qid])) s.skipped = false;
+    if (isAnswered(board.drafts[qid])) s.skipped = false;
     return this.commit(board);
   }
 
@@ -193,7 +194,10 @@ export class BoardStore {
       const d = board.drafts[qid] ?? { value: null };
       board.sent[qid] = d;
       board.qstate[qid].changed = false;
-      return { qid, title: this.question(board, qid).title, value: d.value, ...(d.note ? { note: d.note } : {}) };
+      const title = this.question(board, qid).title;
+      // A note with no value is the person's own answer, not a remark on a choice.
+      if (!hasValue(d) && d.note?.trim()) return { qid, title, value: null, ownAnswer: d.note };
+      return { qid, title, value: d.value, ...(d.note ? { note: d.note } : {}) };
     });
     board.forceSend = [];
     const event = this.event(board, 'answers', { answers });
