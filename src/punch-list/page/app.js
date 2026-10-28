@@ -47,12 +47,14 @@ const qById = (qid) => view.questions.find((q) => q.id === qid);
 function groupOf(q) {
   const s = q.state || {};
   if (s.withdrawn) return 4;
-  if (s.explaining) return 1;
   if (s.changed) return 0;
   if (isAnswered(answerOf(q.id))) return 2;
   if (s.skipped) return 3;
   return 0;
 }
+/** Claude is writing a reply in this question's conversation. Shown as a marker; the question keeps its place. */
+const isReplying = (q) => !!q.state?.explaining;
+const REPLYING = '<span class="replying" title="Claude is replying"><i></i></span>';
 const isUnsent = (qid) => view.unsent.includes(qid) || qid in local;
 const isFresh = (q) => (q.state?.explanations?.length || 0) > (ui.seen[q.id] || 0);
 
@@ -338,36 +340,61 @@ function noteField(q, { hint } = {}) {
   return el('div', { class: 'field' }, label, ta);
 }
 
-function threadNode(q) {
-  const th = el('div', { class: 'thread' });
-  for (const x of q.state?.explanations || []) {
-    const item = el('div', { class: 'expl' });
-    if (x.question) item.append(el('div', { class: 'asked', text: `you asked: ${x.question}` }));
-    item.append(rich(x.html));
-    th.append(item);
+/** The conversation about a Question, oldest first. Older boards only have explanations. */
+function messagesOf(q) {
+  const st = q.state || {};
+  if (st.messages) return st.messages;
+  return (st.explanations || []).flatMap((x) => [...(x.question ? [{ role: 'person', text: x.question }] : []), { role: 'agent', html: x.html }]);
+}
+const chatKey = (q) => JSON.stringify([messagesOf(q).length, q.state?.explaining]);
+
+/** Renders the conversation into `log`; cheap to call on every update. */
+function renderChatLog(log, q) {
+  const key = chatKey(q);
+  if (log.dataset.key === key) return;
+  log.dataset.key = key;
+  log.replaceChildren();
+  for (const m of messagesOf(q)) {
+    if (m.role === 'person') {
+      log.append(el('div', { class: 'msg you' }, el('span', { class: 'who', text: 'You' }),
+        m.text ? el('div', { text: m.text }) : el('div', { class: 'muted', text: 'Explain this more simply, please.' })));
+    } else {
+      log.append(el('div', { class: 'msg claude' }, el('span', { class: 'who', text: 'Claude' }), rich(m.html)));
+    }
   }
-  if (q.state?.explaining) th.append(el('div', { class: 'typing', text: `Claude is explaining${q.state.pendingQuestion ? ` “${q.state.pendingQuestion}”` : ''}` }));
-  return th;
+  if (q.state?.explaining) log.append(el('div', { class: 'msg claude typing-msg' }, el('span', { class: 'who', text: 'Claude' }), el('span', { class: 'typing', text: 'typing' })));
+  log.hidden = !log.children.length;
+  const scroller = log.closest('.insp-body');
+  if (scroller) scroller.scrollTop = scroller.scrollHeight;
 }
 
-function askBox(q, { onAsked } = {}) {
-  const box = el('div', { class: 'ask', 'data-role': 'ask', hidden: true });
-  const ta = el('textarea', { placeholder: "What's unclear? Ask your own question, or leave empty for a simpler explanation.", 'aria-label': 'Your question to Claude' });
-  const submit = async () => {
-    await post('explain', { qid: q.id, text: ta.value });
-    box.hidden = true;
+function chatLog(q) {
+  const log = el('div', { class: 'chat-log', 'data-chat': q.id, 'aria-live': 'polite' });
+  renderChatLog(log, q);
+  return log;
+}
+
+/** The reply box. In the side panel it is always open; inside a card it opens on “Wait, what?”. */
+function composer(q, { inline = false } = {}) {
+  const box = el('div', { class: 'composer', 'data-role': 'ask', hidden: inline && !messagesOf(q).length });
+  const ta = el('textarea', { rows: 2, placeholder: messagesOf(q).length ? 'Reply to Claude…' : 'Ask Claude about this question…', 'aria-label': `Message Claude about: ${q.title}` });
+  const send = async (text) => {
+    await post('explain', { qid: q.id, text });
     ta.value = '';
+    ta.placeholder = 'Reply to Claude…';
     ta.blur();
-    toast(isFocus() ? 'Claude is on it. Moving to the next question meanwhile.' : 'Claude is on it.');
-    onAsked?.();
+    chips.hidden = true;
+    toast('Sent. Keep going with ↵, the reply will be here when you come back.');
   };
   ta.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); e.stopPropagation(); submit(); }
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); e.stopPropagation(); send(ta.value.trim()); }
   });
-  box.append(ta, el('div', { class: 'actions' },
-    el('button', { type: 'button', class: 'btn', html: 'Ask Claude <kbd>↵</kbd>', onclick: submit }),
-    el('button', { type: 'button', class: 'btn ghost', html: 'Cancel <kbd>Esc</kbd>', onclick: () => (box.hidden = true) }),
-  ));
+  const chips = el('div', { class: 'chips', hidden: messagesOf(q).length > 0 },
+    [['Explain simpler', ''], ['Give an example', 'Can you give a concrete example?'], ['What would you pick?', 'Which option would you pick, and why?']]
+      .map(([label, text]) => el('button', { type: 'button', class: 'chip-btn', text: label, onclick: () => send(text) })));
+  box.append(chips, el('div', { class: 'composer-row' }, ta,
+    el('button', { type: 'button', class: 'btn', 'aria-label': 'Send to Claude', html: 'Send <kbd>↵</kbd>', onclick: () => send(ta.value.trim()) })));
+  box.append(el('div', { class: 'composer-hint', html: '<kbd>↵</kbd> send · <kbd>⇧↵</kbd> new line · <kbd>Esc</kbd> back to the question' }));
   return box;
 }
 
@@ -401,10 +428,10 @@ function renderSidebar() {
     for (const id of inGroup) {
       const q = qById(id);
       const cls = ['item', id === current && 'current', isFresh(q) && 'fresh', isUnsent(id) && g !== 4 && 'unsent', g === 4 && 'withdrawn'].filter(Boolean).join(' ');
-      const b = el('button', { type: 'button', class: cls, title: q.title, html: `${GLYPH[g]}<span class="t"></span><span class="a"></span>` });
+      const b = el('button', { type: 'button', class: cls, title: q.title, html: `${GLYPH[g]}<span class="t"></span>${isReplying(q) ? REPLYING : '<span class="a"></span>'}` });
       b.querySelector('.t').textContent = q.title;
-      b.querySelector('.a').textContent = answerText(q);
-      b.setAttribute('aria-label', `${q.title}, ${GROUP_NAME[g].toLowerCase()}${answerText(q) ? `, answer ${answerText(q)}` : ''}`);
+      b.querySelector('.a')?.replaceChildren(answerText(q));
+      b.setAttribute('aria-label', `${q.title}, ${GROUP_NAME[g].toLowerCase()}${answerText(q) ? `, answer ${answerText(q)}` : ''}${isReplying(q) ? ', Claude is replying' : ''}`);
       if (id === current) b.setAttribute('aria-current', 'true');
       b.addEventListener('click', () => reveal(id));
       items.append(b);
@@ -419,10 +446,12 @@ function renderProgress() {
   const shown = view.questions.filter((q) => visible(q) && groupOf(q) !== 4);
   const counts = [0, 0, 0, 0];
   for (const q of shown) counts[groupOf(q)]++;
+  const replying = shown.filter(isReplying).length;
   const segs = el('div', { class: 'segments' });
   const labels = el('div', { class: 'labels' });
   const jump = (g) => { const id = sortedIds().find((x) => groupOf(qById(x)) === g); if (id) reveal(id); };
   counts.forEach((n, g) => {
+    if (g === 1) return;
     if (n) {
       const s = el('button', { type: 'button', class: `segment ${GROUP_CLASS[g]}`, title: `${GROUP_NAME[g]}: ${n}`, 'aria-label': `${GROUP_NAME[g]}: ${n}`, onclick: () => jump(g) });
       s.style.flexGrow = n;
@@ -430,8 +459,9 @@ function renderProgress() {
     }
     labels.append(el('button', { type: 'button', html: `${GLYPH[g]}<b>${n}</b> ${GROUP_NAME[g].toLowerCase()}`, onclick: () => jump(g) }));
   });
+  if (replying) labels.append(el('span', { class: 'replying-label', html: `${REPLYING}Claude is replying to ${replying}` }));
   $('progress').replaceChildren(segs, labels);
-  $('sbCounts').innerHTML = counts.map((n, g) => `<span title="${GROUP_NAME[g]}">${GLYPH[g]}${n}</span>`).join('');
+  $('sbCounts').innerHTML = counts.map((n, g) => (g === 1 ? '' : `<span title="${GROUP_NAME[g]}">${GLYPH[g]}${n}</span>`)).join('') + (replying ? `<span title="Claude is replying">${REPLYING}${replying}</span>` : '');
   const unsent = shown.filter((q) => isUnsent(q.id)).length;
   $('sbUnsent').textContent = unsent ? `${unsent} unsent` : focus.lastSentAt ? `sent ${clock(focus.lastSentAt)}` : 'all sent';
   $('send').disabled = unsent === 0;
@@ -518,7 +548,7 @@ function nextNeeding() {
 /** Changes that need the question card rebuilt; answers typed here never do. */
 function focusHardKey(q) {
   const { state, status, ...def } = q;
-  return JSON.stringify([q.id, def, state?.changed, state?.withdrawn, state?.explanations?.length, state?.explaining, state?.pendingQuestion, wide()]);
+  return JSON.stringify([q.id, def, state?.changed, state?.withdrawn, wide()]);
 }
 
 function renderFocus() {
@@ -548,9 +578,13 @@ function renderFocus() {
 }
 document.addEventListener('focusout', () => setTimeout(() => { if (focus.deferred && isFocus()) renderFocus(); }, 0));
 
-/** Updates what can change while the person is typing: status line, colour, neighbours. */
+/** Updates what can change while the person is typing: status line, colour, neighbours, the conversation. */
 function renderFocusSoft() {
   const q = focus.current && qById(focus.current);
+  if (q) {
+    for (const log of document.querySelectorAll(`.chat-log[data-chat="${CSS.escape(q.id)}"]`)) renderChatLog(log, q);
+    if (wide()) { if ($('inspBody').dataset.qid !== q.id) renderInspector(); syncEmptyState(); }
+  }
   const card = $('board').querySelector('.f-card[data-qid]');
   if (!q || !card) return;
   const g = groupOf(q);
@@ -558,7 +592,7 @@ function renderFocusSoft() {
   card.classList.add(`${GROUP_CLASS[g]}-c`);
   const ids = sortedIds();
   const inGroup = ids.filter((id) => groupOf(qById(id)) === g);
-  card.querySelector('[data-slot=status]').innerHTML = `${GLYPH[g]}${GROUP_NAME[g]} · ${inGroup.indexOf(q.id) + 1} of ${inGroup.length}`;
+  card.querySelector('[data-slot=status]').innerHTML = `${GLYPH[g]}${GROUP_NAME[g]} · ${inGroup.indexOf(q.id) + 1} of ${inGroup.length}${isReplying(q) ? `<span class="replying-label">${REPLYING}Claude is replying</span>` : ''}`;
   card.querySelector('[data-slot=pos]').textContent = `${ids.indexOf(q.id) + 1} / ${ids.length}`;
   const skip = card.querySelector('[data-act=skip]');
   if (skip) skip.innerHTML = q.state?.skipped ? 'Unskip <kbd>s</kbd>' : 'Skip for now <kbd>s</kbd>';
@@ -574,6 +608,7 @@ function peek(id, where) {
   const b = el('button', { type: 'button', class: 'peek', html: `${GLYPH[g]}<span class="t"></span><span class="chip ${GROUP_CLASS[g]}"></span><span class="where">${where}</span>` });
   b.querySelector('.t').textContent = q.title;
   b.querySelector('.chip').textContent = g === 2 ? answerText(q) : GROUP_NAME[g].toLowerCase();
+  if (isReplying(q)) b.querySelector('.chip').insertAdjacentHTML('beforebegin', REPLYING);
   b.setAttribute('aria-label', `${where.replace(/[↑↓]\s*/, '')}: ${q.title}, ${GROUP_NAME[g].toLowerCase()}`);
   b.addEventListener('click', () => goTo(id, where.includes('↑') ? -1 : 1));
   return b;
@@ -599,8 +634,7 @@ function focusCard(q) {
   else card.append(input);
   if (!editable && q.type !== 'custom') card.append(noteField(q, { hint: true }));
   if (!wide()) {
-    if (q.state?.explanations?.length || q.state?.explaining) card.append(threadNode(q));
-    card.append(askBox(q, { onAsked: () => setTimeout(nextNeeding, 300) }));
+    card.append(el('div', { class: 'chat' }, chatLog(q), composer(q, { inline: true })));
   }
   card.append(el('div', { class: 'actions' },
     el('button', { type: 'button', class: 'btn ghost', 'data-act': 'what', html: 'Wait, what? <kbd>?</kbd>', onclick: openAsk }),
@@ -623,7 +657,7 @@ function primaryAction() {
 function doneCard() {
   const shown = view.questions.filter(visible);
   const skipped = shown.filter((q) => groupOf(q) === 3);
-  const explaining = shown.filter((q) => groupOf(q) === 1);
+  const explaining = shown.filter(isReplying);
   const unsent = unsentCount();
   const card = el('section', { class: 'f-card done-card enter ok-c' });
   card.innerHTML = '<svg class="big" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.8 8.3l2.1 2.1 4.3-4.6" fill="none" stroke="var(--bg)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -658,14 +692,21 @@ function doneCard() {
 
 function renderInspector() {
   const body = $('inspBody');
-  body.replaceChildren();
-  if (!isFocus() || !wide()) return;
+  if (!isFocus() || !wide()) return body.replaceChildren();
   const q = focus.current && qById(focus.current);
-  if (!q) return body.append(el('div', { class: 'empty-state', text: 'Explanations for the current question show up here.' }));
+  if (q && body.dataset.qid === q.id) return renderChatLog(body.querySelector('.chat-log'), q);
+  body.dataset.qid = q?.id || '';
+  body.replaceChildren();
+  if (!q) return body.append(el('div', { class: 'empty-state', text: 'Ask Claude about any question here.' }));
   body.append(el('div', { class: 'insp-q' }, el('b', { text: q.title })));
-  if (q.state?.explanations?.length || q.state?.explaining) body.append(threadNode(q));
-  else body.append(el('div', { class: 'empty-state', html: 'Not sure what this question means? Press <kbd>?</kbd> and ask. Claude answers here while you carry on with the next question.' }));
-  if (!q.state?.withdrawn) body.append(askBox(q, { onAsked: () => setTimeout(nextNeeding, 300) }));
+  body.append(el('div', { class: 'empty-state', 'data-empty': '', html: 'Not sure what this means? Ask anything. Claude replies here while you carry on with other questions.' }));
+  body.append(el('div', { class: 'chat' }, chatLog(q)));
+  if (!q.state?.withdrawn) body.append(composer(q));
+  syncEmptyState();
+}
+function syncEmptyState() {
+  const empty = $('inspBody').querySelector('[data-empty]');
+  if (empty) empty.hidden = !$('inspBody').querySelector('.chat-log')?.hidden;
 }
 
 function openAsk() {
@@ -694,7 +735,7 @@ function defKey(q) {
   const { state, status, ...def } = q;
   return JSON.stringify([def, state?.changed, state?.withdrawn, state?.withdrawReason]);
 }
-const threadKey = (q) => JSON.stringify([q.state?.explanations, q.state?.explaining, q.state?.pendingQuestion]);
+const threadKey = (q) => chatKey(q);
 
 function makeCard(q) {
   const parts = {
@@ -743,7 +784,10 @@ function updateCard(q) {
   const tk = threadKey(q);
   if (keys.thread !== tk) {
     keys.thread = tk;
-    parts.thread.replaceChildren(threadNode(q));
+    if (!parts.thread.firstChild) parts.thread.append(chatLog(q));
+    renderChatLog(parts.thread.firstChild, q);
+    const box = parts.ask.querySelector('[data-role=ask]');
+    if (box && messagesOf(q).length) box.hidden = false;
   }
   refreshCardStatus(q, card);
   return card;
@@ -751,6 +795,7 @@ function updateCard(q) {
 
 function statusChip(q) {
   const g = groupOf(q);
+  if (isReplying(q)) return el('span', { class: 'chip wait', 'data-chip': 'status', html: `${REPLYING}Claude is replying` });
   return el('span', { class: `chip ${GROUP_CLASS[g]}`, 'data-chip': 'status', text: q.state?.changed ? 'changed' : GROUP_NAME[g].toLowerCase() });
 }
 
@@ -759,7 +804,7 @@ function refreshCardStatus(q, card) {
   card.el.classList.toggle('is-answered', g === 2);
   card.el.classList.toggle('is-withdrawn', g === 4);
   card.el.classList.toggle('is-changed', !!q.state?.changed);
-  card.el.classList.toggle('is-explaining', g === 1);
+  card.el.classList.toggle('is-explaining', isReplying(q));
   const meta = card.parts.head.querySelector('.card-meta');
   if (meta) {
     meta.querySelector('[data-chip=status]').replaceWith(statusChip(q));
@@ -788,7 +833,7 @@ function renderActions(q, actions, ask) {
   actions.replaceChildren();
   ask.replaceChildren();
   if (q.state?.withdrawn) return;
-  const box = askBox(q);
+  const box = composer(q, { inline: true });
   ask.append(box);
   actions.append(
     el('button', { type: 'button', class: 'btn small ghost', text: 'Wait, what? Explain better', onclick: () => { box.hidden = false; box.querySelector('textarea').focus(); } }),
@@ -888,7 +933,7 @@ function fillColumns() {
   if (!wrap) return;
   const byStatus = view.layout.columnsBy === 'status' || !view.layout.groups?.length;
   const cols = byStatus
-    ? [0, 1, 2, 3, 4].map((g) => ({ id: g, title: GROUP_NAME[g], qs: view.questions.filter((q) => groupOf(q) === g) }))
+    ? [0, 2, 3, 4].map((g) => ({ id: g, title: GROUP_NAME[g], qs: view.questions.filter((q) => groupOf(q) === g) }))
     : groupsOf();
   wrap.replaceChildren(...cols.filter((c) => c.qs.length || c.id === 0).map((c) => {
     const shown = c.qs.filter(visible);
@@ -1107,8 +1152,6 @@ document.addEventListener('keydown', (e) => {
       return;
     }
     if (e.key === 'Escape') {
-      const ask = e.target.closest('[data-role=ask]');
-      if (ask) ask.hidden = true;
       e.target.blur();
     }
     return;

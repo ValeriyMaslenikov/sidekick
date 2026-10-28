@@ -46,6 +46,14 @@ export interface Explanation {
   question?: string;
 }
 
+/** One turn in the conversation about a Question: the person's text or the agent's HTML. */
+export interface Message {
+  role: 'person' | 'agent';
+  at: string;
+  text?: string;
+  html?: string;
+}
+
 export interface QState {
   skipped: boolean;
   withdrawn: boolean;
@@ -54,6 +62,8 @@ export interface QState {
   explaining: boolean;
   pendingQuestion?: string;
   explanations: Explanation[];
+  /** The conversation about this Question, oldest first. */
+  messages?: Message[];
 }
 
 export interface AnswerValue {

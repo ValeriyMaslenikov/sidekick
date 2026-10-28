@@ -12,6 +12,7 @@ import {
   type Board,
   type BoardEvent,
   type EventType,
+  type Message,
   type QState,
   type Question,
 } from './model.js';
@@ -27,6 +28,11 @@ const emptyState = (): QState => ({ skipped: false, withdrawn: false, changed: f
 const canonical = (x: unknown): string =>
   JSON.stringify(x, (_k, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v));
 const same = (a: unknown, b: unknown) => canonical(a) === canonical(b);
+
+const plain = (html: string, max = 600) => {
+  const t = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+};
 
 function checkId(id: string): void {
   if (!BOARD_ID.test(id)) throw new Error(`board id "${id}" must be lowercase letters, digits and "-" (max 63)`);
@@ -123,6 +129,7 @@ export class BoardStore {
   explain(id: string, qid: string, html: string): Board {
     const board = this.get(id);
     const s = this.state(board, qid);
+    this.conversation(s).push({ role: 'agent', at: new Date().toISOString(), html });
     s.explanations.push({ at: new Date().toISOString(), html, ...(s.pendingQuestion ? { question: s.pendingQuestion } : {}) });
     s.explaining = false;
     delete s.pendingQuestion;
@@ -165,10 +172,13 @@ export class BoardStore {
   requestExplain(id: string, qid: string, text: string): BoardEvent {
     const board = this.get(id);
     const s = this.state(board, qid);
+    const messages = this.conversation(s);
+    const previous = messages.map((m) => ({ role: m.role, text: m.role === 'person' ? m.text || '(asked for a simpler explanation)' : plain(m.html ?? '') }));
+    messages.push({ role: 'person', at: new Date().toISOString(), text: text.trim() });
     s.explaining = true;
     if (text.trim()) s.pendingQuestion = text.trim();
     else delete s.pendingQuestion;
-    const event = this.event(board, 'explain', { qid, title: this.question(board, qid).title, text: text.trim() });
+    const event = this.event(board, 'explain', { qid, title: this.question(board, qid).title, text: text.trim(), ...(previous.length ? { previous } : {}) });
     this.commit(board);
     return event;
   }
@@ -251,6 +261,17 @@ export class BoardStore {
     if (!board.done) return;
     board.done = false;
     this.event(board, 'reopened', { reason: 'answer changed after done' });
+  }
+
+  /** The Question's conversation, rebuilt from older explanation-only state the first time. */
+  private conversation(s: QState): Message[] {
+    if (!s.messages) {
+      s.messages = s.explanations.flatMap((x): Message[] => [
+        ...(x.question ? [{ role: 'person' as const, at: x.at, text: x.question }] : []),
+        { role: 'agent', at: x.at, html: x.html },
+      ]);
+    }
+    return s.messages;
   }
 
   private question(board: Board, qid: string): Question {

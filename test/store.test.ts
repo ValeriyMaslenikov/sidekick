@@ -174,5 +174,31 @@ describe('BoardStore', () => {
     store.saveDraft('errors', 'flip', { value: 'a', note: 'cheapest' });
     expect(store.send('errors')?.data).toEqual({ answers: [{ qid: 'flip', title: 'What to do with flip?', value: 'a', note: 'cheapest' }] });
   });
+
+  it('keeps a per-question conversation and sends earlier messages with a follow-up', () => {
+    store.create('errors', input(), opts);
+    store.requestExplain('errors', 'flip', 'what is flip?');
+    store.explain('errors', 'flip', '<p>Flip is a <b>coin</b> game.</p>');
+    store.readEvents('errors');
+    store.requestExplain('errors', 'flip', 'and who plays it?');
+    const q = store.get('errors').qstate.flip;
+    expect(q.messages?.map((m) => [m.role, m.text ?? m.html])).toEqual([
+      ['person', 'what is flip?'],
+      ['agent', '<p>Flip is a <b>coin</b> game.</p>'],
+      ['person', 'and who plays it?'],
+    ]);
+    expect(store.readEvents('errors')[0].data).toEqual({
+      qid: 'flip', title: 'What to do with flip?', text: 'and who plays it?',
+      previous: [{ role: 'person', text: 'what is flip?' }, { role: 'agent', text: 'Flip is a coin game.' }],
+    });
+  });
+
+  it('builds the conversation from explanations saved before conversations existed', () => {
+    store.create('errors', input(), opts);
+    const b = store.get('errors');
+    b.qstate.flip.explanations.push({ at: 'x', html: '<p>Old answer</p>', question: 'old q' });
+    store.requestExplain('errors', 'flip', 'new q');
+    expect(store.get('errors').qstate.flip.messages?.map((m) => m.role)).toEqual(['person', 'agent', 'person']);
+  });
 });
 
