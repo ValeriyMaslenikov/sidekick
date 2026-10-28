@@ -692,17 +692,19 @@ function doneCard() {
 
 function renderInspector() {
   const body = $('inspBody');
-  if (!isFocus() || !wide()) return body.replaceChildren();
+  if (!isFocus() || !wide()) { $('inspFoot').replaceChildren(); return body.replaceChildren(); }
   const q = focus.current && qById(focus.current);
   if (q && body.dataset.qid === q.id) return renderChatLog(body.querySelector('.chat-log'), q);
   body.dataset.qid = q?.id || '';
   body.replaceChildren();
+  $('inspFoot').replaceChildren();
   if (!q) return body.append(el('div', { class: 'empty-state', text: 'Ask Claude about any question here.' }));
   body.append(el('div', { class: 'insp-q' }, el('b', { text: q.title })));
   body.append(el('div', { class: 'empty-state', 'data-empty': '', html: 'Not sure what this means? Ask anything. Claude replies here while you carry on with other questions.' }));
   body.append(el('div', { class: 'chat' }, chatLog(q)));
-  if (!q.state?.withdrawn) body.append(composer(q));
+  if (!q.state?.withdrawn) $('inspFoot').append(composer(q));
   syncEmptyState();
+  body.scrollTop = body.scrollHeight;
 }
 function syncEmptyState() {
   const empty = $('inspBody').querySelector('[data-empty]');
@@ -710,7 +712,7 @@ function syncEmptyState() {
 }
 
 function openAsk() {
-  const scope = isFocus() && wide() ? $('inspBody') : $('board');
+  const scope = isFocus() && wide() ? $('inspFoot') : $('board');
   const box = scope.querySelector('[data-role=ask]');
   if (!box) return;
   box.hidden = false;

@@ -288,7 +288,8 @@ body.resizing { cursor: col-resize; user-select: none; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .chip-btn { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: transparent; color: var(--ink); cursor: pointer; }
 .chip-btn:hover { border-color: var(--wait); color: var(--wait); }
-.inspector .composer { position: sticky; bottom: 0; background: var(--panel); padding: 8px 0 4px; margin-top: auto; }
+.insp-foot { padding: 10px 16px 12px; border-top: 1px solid var(--line); background: var(--panel); }
+.insp-foot:empty { display: none; }
 .insp-body { flex: 1; }
 .replying { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; }
 .replying i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--wait); border-right-color: transparent; animation: spin .9s linear infinite; }
@@ -297,3 +298,5 @@ body.resizing { cursor: col-resize; user-select: none; }
 .chip.wait .replying { width: 12px; height: 12px; margin-right: 4px; vertical-align: -2px; }
 .chip.wait .replying i { width: 8px; height: 8px; }
 .peek .replying { margin-right: -4px; }
+/* Panel children keep their full height; the panel scrolls instead of squeezing them. */
+.insp-body > * { flex-shrink: 0; }
