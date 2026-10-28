@@ -106,6 +106,8 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--line-st
 
 .banner { border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; border: 1px solid; }
 .banner.warn { background: var(--need-soft); color: var(--need); border-color: color-mix(in srgb, var(--need) 35%, transparent); }
+.banner.quiet { background: var(--raised); color: var(--muted); border-color: var(--line-strong); }
+.banner.quiet strong { color: var(--ink); }
 .banner.ok { background: var(--ok-soft); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, transparent); flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .copyrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .copyrow code { color: var(--ink); flex: 1 1 300px; padding: 6px 8px; }
@@ -237,7 +239,9 @@ body.resizing { cursor: col-resize; user-select: none; }
 .statusbar { grid-area: status; display: flex; align-items: center; gap: 14px; padding: 0 8px 0 12px; background: var(--panel); border-top: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; }
 .statusbar .live { display: flex; gap: 6px; align-items: center; color: var(--ok); }
 .statusbar .live i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 22%, transparent); }
-.statusbar .live.off { color: var(--need); }
+.statusbar .live.busy { color: var(--wait); }
+.statusbar .live.busy i { width: 9px; height: 9px; background: none; box-shadow: none; border: 2px solid currentColor; border-right-color: transparent; animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .statusbar .counts { display: flex; gap: 12px; }
 .statusbar .counts span { display: flex; gap: 5px; align-items: center; }
 .statusbar .counts svg.g { width: 12px; height: 12px; }

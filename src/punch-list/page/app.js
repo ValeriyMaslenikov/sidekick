@@ -450,16 +450,32 @@ function renderChrome() {
     $('intro').dataset.html = view.intro || '';
     setRich($('intro'), view.intro);
   }
-  $('banner-listen').hidden = view.listening || view.done;
   $('resume-prompt').textContent = view.resumePrompt;
   $('banner-done').hidden = !view.done;
-  $('listen').classList.toggle('off', !view.listening);
-  $('listenText').textContent = view.listening ? 'listening' : 'not listening';
+  renderListening();
   $('app').classList.toggle('no-insp', !isFocus());
   $('mainIn').classList.toggle('wide', view.layout.type === 'columns' || view.layout.type === 'custom');
   renderSidebar();
   renderProgress();
 }
+
+// Claude often stops listening briefly while it works and comes back by itself, so a gap is
+// shown as "busy". Only a long gap surfaces the resume prompt.
+const STALE_MS = 10 * 60 * 1000;
+let notListeningSince = null;
+
+function renderListening() {
+  const waiting = !view.listening && !view.done;
+  if (!waiting) notListeningSince = null;
+  else notListeningSince ??= Date.now();
+  const stale = waiting && Date.now() - notListeningSince >= STALE_MS;
+  $('listen').classList.toggle('busy', waiting);
+  $('listenText').textContent = view.done ? 'done' : view.listening ? 'listening' : 'Claude is busy · picks up your answers when it\u2019s back';
+  $('nudge').hidden = !waiting;
+  $('banner-listen').hidden = !stale;
+  if (stale) $('stale-text').textContent = `Claude hasn't checked in for ${Math.round((Date.now() - notListeningSince) / 60000)} minutes.`;
+}
+setInterval(() => { if (view) renderListening(); }, 30_000);
 
 /** Cheap update after a local change (an answer, a note): status, counts, sidebar. */
 function refresh() {
@@ -973,6 +989,10 @@ function nextCardAfter(node) {
 
 // ---------- status bar actions ----------
 
+$('nudge').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(view.resumePrompt); toast('Copied. Paste it into your agent if Claude seems stuck.'); }
+  catch { toast(view.resumePrompt); }
+});
 $('copy-resume').addEventListener('click', async () => {
   const text = $('resume-prompt').textContent;
   try { await navigator.clipboard.writeText(text); toast('Copied. Paste it into your agent.'); }

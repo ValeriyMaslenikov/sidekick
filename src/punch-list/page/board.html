@@ -30,8 +30,8 @@
     <div class="main-in" id="mainIn">
       <div class="board-head"><h1 id="title">Loading…</h1><div id="intro" class="intro rich"></div></div>
       <div id="banner-conn" class="banner warn" hidden>Lost connection to the punch-list server. Reconnecting…</div>
-      <div id="banner-listen" class="banner warn" hidden>
-        <div><strong>Claude isn't listening.</strong> Your answers are saved. Paste this into your agent to pick the board back up:</div>
+      <div id="banner-listen" class="banner quiet" hidden>
+        <div><strong id="stale-text">Claude hasn't checked in for a while.</strong> Your answers are saved. It usually comes back by itself; if it seems stuck, paste this into your agent:</div>
         <div class="copyrow"><code id="resume-prompt"></code><button type="button" class="btn small" id="copy-resume">Copy</button></div>
       </div>
       <div id="banner-done" class="banner ok" hidden>
@@ -51,6 +51,7 @@
 
   <footer class="statusbar">
     <span class="live" id="listen"><i></i><span id="listenText">listening</span></span>
+    <button type="button" class="sb-btn" id="nudge" hidden title="Copy a prompt that tells Claude to start listening again. Usually not needed: Claude comes back by itself.">Copy nudge</button>
     <span class="counts" id="sbCounts"></span>
     <span class="spacer"></span>
     <span id="sbUnsent"></span>
